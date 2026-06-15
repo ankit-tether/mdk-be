@@ -2,7 +2,7 @@
 
 > **Version:** 1.0.0  |  **Date:** 2026-06-13  |  **Status:** Final
 >
-> The MDK Developer Skill is delivered as a **Skill Suite** shipped via the **universal Agent Skills standard** (`npx skills add`), with explicit install steps for **Cursor** and **Claude Code** (§7). Per-agent native plugin bundles/marketplaces are intentionally **out of scope** (§7.5). Site discovery reuses the **existing App Node MCP** (`[hld-agentic-framework.md](./hld-agentic-framework.md)` §3).
+> The MDK Developer Skill is delivered as a **Skill Suite** shipped via the **universal Agent Skills standard** (`npx skills add`), with explicit install steps for **Cursor** and **Claude Code** (§7). Per-agent native plugin bundles/marketplaces are intentionally **out of scope** (see §10). Site discovery reuses the **existing App Node MCP** (`[hld-agentic-framework.md](./hld-agentic-framework.md)` §3).
 >
 > Companion to `[hld.md](./hld.md)`, `[hld-agentic-framework.md](./hld-agentic-framework.md)`, `[hld-mdk-app.md](./hld-mdk-app.md)`, and `[hld-app-node-plugins.md](./hld-app-node-plugins.md)`. Indexed against `[mdk-libraries.md](./mdk-libraries.md)`.
 
@@ -82,7 +82,7 @@ Skills are **procedural memory for agents** — version-controlled, diffable, co
 > **Key design decisions:**
 >
 > 1. **Distribution is universal.** One set of `SKILL.md` folders, installed via `npx skills add`. Every major coding agent reads the *same* files. See §7.
-> 2. **No per-agent native plugins.** We do not ship `.claude-plugin/`, `.cursor-plugin/`, or `marketplace.json`. Rationale in §7.5.
+> 2. **No per-agent native plugins.** We do not ship `.claude-plugin/`, `.cursor-plugin/`, or `marketplace.json`. Rationale in §10.
 > 3. **The MCP already exists.** Site Capability Discovery (§5.1) reuses the App Node MCP — no new discovery surface.
 
 ---
@@ -434,7 +434,7 @@ Ground in real expertise; **add what the agent lacks, omit what it knows**; **go
 
 ## 7. Distribution & consumption
 
-> **Stance:** universal distribution via standard `SKILL.md` folders, installed with `npx skills add`. No per-agent native plugins (§7.5). The App Node MCP already exists and is configured separately (§7.6).
+> **Stance:** universal distribution via standard `SKILL.md` folders, installed with `npx skills add`. No per-agent native plugins (see §10). The App Node MCP already exists and is configured separately (§7.5).
 
 ### 7.1 Packaging & versioning
 
@@ -471,19 +471,7 @@ npx skills add @tetherto/mdk-skill --client claude-code
 
 Manual fallback: copy the `mdk/` folder into `.claude/skills/`. Verify with `/skills` — `mdk` and sub-skills should appear.
 
-### 7.5 Why no per-agent native plugins
-
-The [AWS Agent Toolkit](https://github.com/aws/agent-toolkit-for-aws) is the reference: it ships the same universal `SKILL.md` structure we adopt, but additionally layers per-agent bundles (`.claude-plugin/`, `.cursor-plugin/`, `marketplace.json`). We skip that layer because:
-
-- ~50 agents already read the same `SKILL.md` — no per-agent packaging needed for portability.
-- Per-agent plugins mainly add one-click marketplace install + bundled MCP. Our MCP already exists on the App Node and is configured separately (§7.6).
-- Each native manifest is another artifact to sync and CI-gate — not worth the cost yet.
-
-**What we adopt from AWS:** domain-grouped skills structure, always-on rules file (`AGENTS.md`), CI validation gate. **What we skip:** per-agent plugin bundles and marketplace entries. See §10 for the full reference.
-
-> Revisit if we need a one-click "skills + App Node MCP" marketplace entry for a specific client. Tracked in §9.
-
-### 7.6 Relationship to the existing App Node MCP
+### 7.5 Relationship to the existing App Node MCP
 
 The skill suite is **build-time judgment only** — it does not bundle or replace the runtime MCP. The App Node MCP from `[hld-agentic-framework.md](./hld-agentic-framework.md)` §3 already exists and exposes site-level configs; it is what Site Capability Discovery (§5.1) reads.
 
@@ -500,9 +488,7 @@ To let the agent query live site capabilities, register the existing MCP endpoin
 }
 ```
 
-> Two independent, composable layers: **install the skill** (§7.2–§7.4) for *judgment*, **register the App Node MCP** for live *capability/discovery*.
-
-### 7.7 MDK Bootstrap CLI
+### 7.6 MDK Bootstrap CLI
 
 The `mdk bootstrap` CLI (`[hld-agentic-framework.md](./hld-agentic-framework.md)` §2.3) orchestrates first-time project scaffolding — it runs `npx skills add @tetherto/mdk-skill` as one step in its broader flow (workspace init, env config, MCP registration, etc.). It is a convenience orchestrator, not an alternative distribution mechanism.
 
@@ -581,10 +567,9 @@ flowchart LR
 ## 9. Open questions & future work
 
 
-| #   | Question                                                                                                                              | Action needed                                                                                                                                                                           |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | **Plugin-discovery MCP tool.** Worker capabilities are surfaced by the existing MCP; installed *plugins* need an equivalent MCP tool. | Concrete gap in `@tetherto/mdk-app-node` — the plugin loader holds the registry, expose it as an MCP tool. Until then, static fallback applies. **Needs tracking in App Node backlog.** |
-| 2   | **Skill evals.** No mechanism yet to measure whether the skill produces correct MDK code.                                             | Design `evals/` — test prompts + graders — and wire into CI. Needs a separate design pass and owner.                                                                                    |
+| #   | Question                                                                                  | Action needed                                                                                                                                                                                         |
+| --- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Skill evals.** No mechanism yet to measure whether the skill produces correct MDK code. | Design `evals/` — test prompts + graders — and wire into CI. Needs a separate design pass and owner. [https://developers.openai.com/blog/eval-skills](https://developers.openai.com/blog/eval-skills) |
 
 
 ---
@@ -611,24 +596,24 @@ agent-toolkit-for-aws/
 **What MDK adopts:**
 
 
-| AWS element                                   | MDK equivalent                                                         |
-| --------------------------------------------- | ---------------------------------------------------------------------- |
-| `skills/core-skills/` + `specialized-skills/` | Router `mdk/SKILL.md` + 4 job sub-skills — same structure, smaller set |
-| `rules/aws-agent-rules.md`                    | `AGENTS.md` (§8), written by `npx skills add`                          |
-| `tools/validate.py`                           | Copy-freshness + frontmatter + package-name CI gates (§6.2)            |
-| MCP servers in the toolkit                    | Existing App Node MCP — reused, not re-shipped (§7.6)                  |
+| AWS element                                   | MDK equivalent                                                                     |
+| --------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `skills/core-skills/` + `specialized-skills/` | Router `mdk/SKILL.md` + 4 job sub-skills — same structure, smaller set             |
+| `rules/aws-agent-rules.md`                    | `AGENTS.md` (§8), written by `npx skills add`                                      |
+| `tools/validate.py`                           | Copy-freshness + frontmatter + package-name CI gates (§6.2) as part of CI Pipeline |
+| MCP servers in the toolkit                    | Existing App Node MCP — reused, not re-shipped (§7.5)                              |
 
 
-**What MDK skips:** the per-agent native plugin layer. AWS needs it to bundle its own MCP servers into a single one-click install for dozens of officially-supported clients. MDK's MCP already exists independently on the App Node and is registered separately — the bundled-plugin convenience adds no value here. See §7.5 for rationale and the future trigger to revisit.
+**What MDK skips — and why:** the per-agent native plugin layer (`.claude-plugin/`, `.cursor-plugin/`, `marketplace.json`).
+
+- **Portability is already solved.** ~50 agents read the same `SKILL.md` — no per-agent packaging needed.
+- **The bundled-MCP convenience doesn't apply.** AWS ships per-agent plugins primarily to bundle its own MCP servers into a single one-click install. MDK's MCP already exists independently on the App Node and is registered separately (§7.5) — no bundling needed.
+- **Maintenance cost.** Each native manifest is another artifact to sync and CI-gate — not worth it until there's a concrete client we can only reach via its plugin format.
+
+> **Future trigger:** if we need a one-click "skills + App Node MCP" marketplace entry for a specific client, add that client's plugin manifest as an extra generated output from CI/CD on top of the same `SKILL.md` sources.
 
 ---
 
 ## 11. Summary
 
-Four jobs. Four sub-skills. One router. Installed with `npx skills add @tetherto/mdk-skill` (writes skill suite + `AGENTS.md`).
-
-- **#1 Device worker** — site-agnostic; skill value is the local test loop (no live site needed).
-- **#2 Plugin / #3 UI component** — site-aware; both pivot on Site Capability Discovery via the App Node MCP.
-- **#4 Deployment** — example-first; ships a runnable launcher.
-
-`mdk-skill` is a copy-only assembler — each library owns its artifacts, the skill bundles them. No new runtime authority. No per-agent plugins (see §10 for the AWS reference).
+Four jobs. Four sub-skills. One router. Installed with `npx skills add @tetherto/mdk-skill` (writes skill suite + `AGENTS.md`). `mdk-skill` is a copy-only assembler — each library owns its artifacts, the skill bundles them. 
