@@ -1,239 +1,227 @@
 # MDK — Documentation Hierarchy & Standards
 
-> **Version:** 1.0.0  |  **Date:** 2026-06-19  |  **Status:** Stable
+> **Version:** 2.1.0  |  **Date:** 2026-06-24  |  **Status:** In Review
 >
-> Brief for the MDK documentation engineer. Defines canonical naming, the platform package hierarchy, the Diátaxis-based section structure, the left-sidebar information architecture, page-level conventions, and versioning policy for the public documentation website.
+> Foundational conventions for MDK documentation: canonical naming, the platform package hierarchy, and the site information architecture.
 
 ---
 
 ## 1. Canonical Component Naming
 
-> **Status: names not yet finalised.** The names used throughout this document (**Kernel** and **Gateway**) are working placeholders pending team sign-off. See §1.3 for the open alternatives under consideration.
-
-The following names are **retired**. All pages, nav labels, diagrams, and code examples on the documentation site use the working canonical names until a final decision is made.
+> **One naming decision remains open** — the `mdk-addons` tier name. See §5. All component names below are confirmed.
 
 
-| Retired Name        | Working Name | Retired Package          | Working Package         |
-| ------------------- | ------------ | ------------------------ | ----------------------- |
-| ORK / ORK Kernel    | **Kernel**   | `@tetherto/mdk-ork`      | `@tetherto/mdk-kernel`  |
-| App Node / App-Node | **Gateway**  | `@tetherto/mdk-app-node` | `@tetherto/mdk-gateway` |
+| Retired Name | Canonical Name | Package                 |
+| ------------ | -------------- | ----------------------- |
+| ORK          | **Kernel**     | `@tetherto/mdk-kernel`  |
+| App Node     | **Gateway**    | `@tetherto/mdk-gateway` |
+| MDK Client   | **Client**     | `@tetherto/mdk-client`  |
+| Worker Base  | **Worker**     | `@tetherto/mdk-worker`  |
 
-
-All other package names are unchanged.
-
-### 1.1 Rationale for working names
-
-- **Kernel** — the protected coordination core that everything depends on. Matches the Kubernetes-inspired design intent. Risk: systems developers may associate this with an OS/Linux kernel, which creates the wrong mental model — ORK is a high-level coordinator, not low-level privileged code.
-- **Gateway** — precisely describes the boundary role: the sole authenticated entry point between consumers (UI, AI agents) and the Kernel. "App Node" was too implementation-specific and easily misread by external developers.
-
-### 1.2 Stronger alternatives under consideration
-
-An evaluation of alternatives was done against what each component actually does:
-
-**For ORK / Kernel:**
-
-
-| Candidate              | Assessment                                                                                                                                                                                |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Conductor**          | Best fit. A conductor never plays an instrument — initiates every cue, all musicians respond. This precisely describes ORK's pull-only model. Unique and ownable in the mining/IoT space. |
-| **Orchestrator** ⭐     | Maximally descriptive, immediately understood. Slightly long (`@tetherto/mdk-orchestrator`) but honest.                                                                                   |
-| **Kernel** *(current)* | Usable but risks OS/Linux kernel confusion for systems developers.                                                                                                                        |
-| **Controller**         | Kubernetes-adjacent and appropriate, but overloaded — every framework has a controller.                                                                                                   |
-
-
-**For App Node / Gateway:**
-
-
-| Candidate                 | Assessment                                                                                                                                                                                    |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Gateway** *(current)* ⭐ | Accurate entry-point/boundary metaphor. Widely understood in infrastructure. Some overlap with API Gateway products (AWS, Kong) but unambiguous in MDK's context since developers *build* it. |
-| **Host**                  | "You host your application logic here." Honest but not memorable.                                                                                                                             |
-| **Node**                  | Avoid — `Node.js` collision is too strong; developers will read it as runtime-specific.                                                                                                       |
-| **Bridge**                | Implies thin pass-through; App Node does much more (auth, aggregation, plugins).                                                                                                              |
-
-
-**Top recommendation:** replace **Kernel** with **Conductor** (`@tetherto/mdk-conductor`). Keep **Gateway** as-is. The Conductor metaphor is exact and unique; Kernel carries OS baggage.
-
-**For the mdk-addons tier:**
-
-The name "mdk-addons" is informal. It describes neither the audience (community builders and Tether reference authors) nor the purpose (extending mdk-core with device integrations and custom business logic).
-
-
-| Candidate                  | Assessment                                                                                                                                                                                                                |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **mdk-extensions** ⭐       | The most established pattern — VS Code, Firefox, Chrome all use "extensions" for things that extend a core platform. Both Worker Plugins and Gateway Plugins are extensions of mdk-core. Widely understood by developers. |
-| **mdk-integrations**       | Emphasises the purpose: integrating hardware devices and external services. Clear and honest. Slightly narrower connotation than "extensions" but very legible.                                                           |
-| **mdk-plugins**            | Consistent with the terminology already used within the tier (Worker Plugins, Gateway Plugins). Risk: could be confused with a single plugin package rather than a tier.                                                  |
-| **mdk-addons** *(current)* | Common in browser ecosystems but informal. Slightly undermines the tier's importance as the primary extensibility model.                                                                                                  |
-
-
-**For Worker Base (`@tetherto/mdk-worker-base`):**
-
-The name "Worker Base" describes what it is in code (an abstract base class) rather than what it does for the developer. It is the SDK a developer uses to build a Worker Plugin.
-
-
-| Candidate                   | Assessment                                                                                                                                                      |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Worker SDK** ⭐            | Most honest. It is an SDK for building workers. `@tetherto/mdk-worker-sdk` is clean and immediately clear to an external integrator.                            |
-| **Worker Kit**              | Consistent with the `mdk-ui-devkit` naming pattern already in use. `@tetherto/mdk-worker-kit`.                                                                  |
-| **Device SDK**              | Emphasises what you are integrating (a device). `@tetherto/mdk-device-sdk`. Clear but slightly narrows the concept — workers can also wrap non-device services. |
-| **Worker Base** *(current)* | Describes the code pattern (base class) rather than the developer's job. Acceptable internally but weak as a public package name.                               |
-
-
-### 1.3 Decision needed
-
-- [ ] Confirm or replace **Kernel** — recommended alternative is **Conductor**
-- [ ] Confirm or replace **Gateway** — current proposal stands as the strongest option
-- [ ] Confirm or replace **mdk-addons** tier name — recommended alternative is **mdk-extensions**
-- [ ] Confirm or replace **Worker Base** — recommended alternative is **Worker SDK** (`@tetherto/mdk-worker-sdk`)
-
-Until decided, this document and the documentation site use **Kernel**, **Gateway**, **mdk-addons**, and **Worker Base** as working names.
 
 ---
 
 ## 2. Platform Package Hierarchy
 
-MDK is organized into three tiers. This hierarchy drives the documentation site's **product groupings** — each tier gets its own section in the sidebar Reference group (see §4).
+The single source of truth for component structure. **Everyone must use this exact terminology and hierarchy.**
 
 ```
 MDK Platform
 │
 ├── mdk-core          [Built by Tether — invariant foundation]
-│   ├── Kernel            @tetherto/mdk-kernel
-│   ├── Gateway           @tetherto/mdk-gateway
-│   ├── MDK Client        @tetherto/mdk-client
-│   └── Worker Base       @tetherto/mdk-worker-base  ⚠️ name pending
+│   ├── Kernel        @tetherto/mdk-kernel    — orchestration engine
+│   ├── Gateway       @tetherto/mdk-gateway   — authenticated API boundary
+│   ├── Client        @tetherto/mdk-client    — transport SDK (HRPC / IPC)
+│   └── Worker        @tetherto/mdk-worker    — base for device integrations
 │
-├── mdk-addons ⚠️     [Built by Tether reference + Community]  ⚠️ name pending
-│   ├── Worker Plugins    (subclass mdk-worker-base + mdk-contract.json)
-│   └── Gateway Plugins   (plain-JS controllers + mdk-plugin.json)
+├── mdk-addons ⚠️     [Built by Tether reference + Community]  (tier name open — see §5)
+│   ├── Worker Plugins    @<org>/mdk-worker-<device>   — subclass Worker + mdk-contract.json
+│   └── Gateway Plugins   @<org>/mdk-plugin-<feature>  — controllers + mdk-plugin.json
 │
 └── mdk-ui-devkit     [Built by Tether — optional frontend layer]
-    ├── MDK-UI-Core          @tetherto/mdk-ui-core           ✅ available
-    ├── MDK-React-Adapter    @tetherto/mdk-react-adapter     ✅ available
-    ├── MDK-React-Components @tetherto/mdk-react-devkit      ✅ available
-    ├── MDK-Fonts            @tetherto/mdk-fonts             ✅ available
-    ├── MDK-Vue-Adapter      @tetherto/mdk-vue-adapter       🔜 planned
-    ├── MDK-Svelte-Adapter   @tetherto/mdk-svelte-adapter    🔜 planned
-    └── MDK-WC-Adapter       @tetherto/mdk-wc-adapter        🔜 planned
+    ├── UI Core            @tetherto/mdk-ui-core        
+    ├── React Adapter      @tetherto/mdk-react-adapter  
+    ├── React Components   @tetherto/mdk-react-devkit   
+    └── Fonts              @tetherto/mdk-fonts          
 ```
 
-### Tier summaries
+### 2.1 Architecture diagram (canonical)
 
-**mdk-core** — the invariant foundation published to npm. All other tiers depend on it.
+```mermaid
+flowchart TD
+    subgraph CONSUMERS["Consumers"]
+        direction LR
+        UI["UI / Dashboard"]
+        AI["AI Agent"]
+    end
+
+    subgraph CORE["mdk-core"]
+        direction TB
+        GW["<b>Gateway</b><br/>auth · JWT/RBAC · MCP · plugin host"]
+        KR["<b>Kernel</b><br/>orchestration engine"]
+        WK["<b>Worker</b><br/>device integration"]
+        GP(["Gateway Plugins"])
+        WP(["Worker Plugins"])
+    end
+
+    DEVICES["<b>Physical Devices</b><br/>Miners · Sensors · Containers"]
+
+    UI -->|"HTTP / WebSocket"| GW
+    AI -->|"MCP"| GW
+    GW -->|"Client"| KR
+    KR -->|"MDK Protocol · pull-based"| WK
+    WK -->|"device APIs"| DEVICES
+
+    GW -.->|hosts| GP
+    WP -.->|subclasses| WK
+```
 
 
-| Component      | Package                        | One-line description                                                                                                      |
-| -------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| Kernel         | `@tetherto/mdk-kernel`         | Orchestration engine: device registry, command routing, telemetry, health monitoring                                      |
-| Gateway        | `@tetherto/mdk-gateway`        | API boundary: JWT/RBAC, REST/WebSocket/MCP surface, plugin loader                                                         |
-| MDK Client     | `@tetherto/mdk-client`         | Transport SDK over HRPC/IPC; multi-language (Node.js, Python, Go)                                                         |
-| Worker Base ⚠️ | `@tetherto/mdk-worker-base` ⚠️ | SDK for building Worker Plugins — provides HRPC/MDK Protocol plumbing, `onTelemetryPull` / `onCommand`. Name pending (§1) |
+
+### 2.2 Component descriptions
 
 
-**mdk-addons** ⚠️ *(name pending — see §1)* — extension layer; built on mdk-core only.
-
-- **Worker Plugins** — integrate a physical device or external service. Subclass `mdk-worker-base`, implement `onTelemetryPull` / `onCommand`, ship an `mdk-contract.json`. Community pattern: `@<org>/mdk-worker-<device>`.
-- **Gateway Plugins** — inject custom aggregated HTTP/WebSocket endpoints into the Gateway. Ship an `mdk-plugin.json` manifest and plain-JS controllers. Community pattern: `@<org>/mdk-plugin-<feature>`.
-
-**mdk-ui-devkit** — optional frontend layer for building mining dashboards.
-
-
-| Component            | Package                        | Status      | One-line description                                                                                 |
-| -------------------- | ------------------------------ | ----------- | ---------------------------------------------------------------------------------------------------- |
-| MDK-UI-Core          | `@tetherto/mdk-ui-core`        | ✅ Available | Headless state + API client; framework-agnostic. Telemetry buffering, optimistic UI, stale detection |
-| MDK-React-Adapter    | `@tetherto/mdk-react-adapter`  | ✅ Available | React hooks (`useTelemetry`, `useCommand`) over mdk-ui-core                                          |
-| MDK-React-Components | `@tetherto/mdk-react-devkit`   | ✅ Available | Radix-based React component library; 3-tier CSS customization, no Tailwind dependency                |
-| MDK-Fonts            | `@tetherto/mdk-fonts`          | ✅ Available | Shared typeface bundle for MDK UI surfaces                                                           |
-| MDK-Vue-Adapter      | `@tetherto/mdk-vue-adapter`    | 🔜 Planned  | Vue reactive bindings over mdk-ui-core                                                               |
-| MDK-Svelte-Adapter   | `@tetherto/mdk-svelte-adapter` | 🔜 Planned  | Svelte store bindings over mdk-ui-core                                                               |
-| MDK-WC-Adapter       | `@tetherto/mdk-wc-adapter`     | 🔜 Planned  | Web Components bindings over mdk-ui-core                                                             |
+| Tier          | Component            | Package                        | Description                                                                                                                              |
+| ------------- | -------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| mdk-core      | **Kernel**           | `@tetherto/mdk-kernel`         | Orchestration engine: device registry, command routing, telemetry, health monitoring. Pull-only; trusts nothing but whitelisted clients. |
+| mdk-core      | **Gateway**          | `@tetherto/mdk-gateway`        | The only authenticated entry point. JWT/RBAC, REST/WebSocket/MCP, hosts Gateway Plugins. Reaches the Kernel via Client.                  |
+| mdk-core      | **Client**           | `@tetherto/mdk-client`         | Transport SDK over HRPC/IPC; multi-language (Node.js, Python, Go). Usable standalone without a Gateway.                                  |
+| mdk-core      | **Worker**           | `@tetherto/mdk-worker`         | Base for device integrations. Provides MDK Protocol plumbing; implement `onTelemetryPull` / `onCommand`.                                 |
+| mdk-addons ⚠️ | **Worker Plugin**    | `@<org>/mdk-worker-<device>`   | Subclasses Worker, ships an `mdk-contract.json`. Integrates a physical device or external service.                                       |
+| mdk-addons ⚠️ | **Gateway Plugin**   | `@<org>/mdk-plugin-<feature>`  | Plain-JS controllers + `mdk-plugin.json`; loaded into the Gateway at boot. Adds custom aggregated HTTP/WS endpoints.                     |
+| mdk-ui-devkit | **UI Core**          | `@tetherto/mdk-ui-core`        | Headless state + API client; framework-agnostic. Telemetry buffering, optimistic UI, stale detection.                                    |
+| mdk-ui-devkit | **React Adapter**    | `@tetherto/mdk-react-adapter`  | React hooks (`useTelemetry`, `useCommand`) over UI Core.                                                                                 |
+| mdk-ui-devkit | **React Components** ⚠️ | `@tetherto/mdk-react-devkit` ⚠️ | Radix-based component library; 3-tier CSS customization, no Tailwind dependency. Name pending — see §4.3.                             |
+| mdk-ui-devkit | **Fonts**            | `@tetherto/mdk-fonts`          | Shared typeface bundle for MDK UI surfaces.                                                                                              |
 
 
 ---
 
-## 3. Left-Sidebar Information Architecture
+## 3. Site Information Architecture
 
-The MDK documentation site is structured using the **[Diátaxis](https://diataxis.fr/)** framework. The four quadrants (Tutorials, How-to Guides, Concepts, Reference) form the top-level sidebar groups. All labels use canonical names (Kernel, Gateway).
+The MDK docs site uses the **[Diátaxis](https://diataxis.fr/)** framework. Tutorials collapse into a single **Quickstart**; Explanation is surfaced as **Understanding MDK**; agentic content gets its own chapter.
 
 ```
 📖 Introduction
-   ├─ What is MDK?
-   ├─ Architecture at a glance
-   └─ Quickstart  ──────────────────────────> (links into Tutorials)
+   1.  What is MDK?
+   2.  Quickstart  (one golden path, end-to-end)
 
-🎓 Tutorials
-   ├─ Deploy MDK end-to-end (Gateway + Kernel + Worker)
-   ├─ Build your first Worker Plugin
-   ├─ Build your first dashboard with the UI Devkit
-   └─ Connect your first AI agent
+🛠️ Guides
+   1.  Deploy MDK
+       1.1  Single-process mode
+       1.2  Multi-process mode
+       1.3  Multi-site deployment (parallel Kernels)  → U.5
+       1.4  Harden your deployment                    → U.7
+   2.  Build a Worker Plugin                          → U.3.4, U.4.1
+       2.1  Author an mdk-contract.json               → R.1.4
+   3.  Build a Gateway Plugin                         → U.3.2, U.4.2
+       3.1  Aggregate across workers & sites          → U.5
+   4.  Build a Dashboard
+       4.1  Use the UI Devkit                         → U.6
+       4.2  Use Components in Dashboard Shell         → U.6.1
+       4.2  Customize UI components (3-tier CSS)      → R.2
 
-🛠️ How-to Guides
-   ├─ Build a Worker Plugin
-   ├─ Author an mdk-contract.json
-   ├─ Write a Gateway Plugin
-   ├─ Aggregate data across workers & sites
-   ├─ Connect an AI / MCP agent
-   ├─ Customize UI Devkit components (3-tier CSS)
-   ├─ Set up a multi-site deployment (parallel Kernels)
-   └─ Bootstrap a new instance (create-mdk-instance)
+💡 Understanding MDK  (U.*)
+   U.1  Architecture overview
+   U.2  The MDK Protocol
+   U.3  mdk-core
+        U.3.1  Kernel
+        U.3.2  Gateway
+        U.3.3  Client
+        U.3.4  Worker
+   U.4  mdk-addons
+        U.4.1  Worker Plugins
+        U.4.2  Gateway Plugins
+   U.5  Scaling model (multi-site)
+   U.6  mdk-ui-devkit                                     → R.2
+        U.6.1  Dashboard shell
+        U.6.2  React Components
+   U.7  Security  (auth · JWT/RBAC · whitelisting · etc)
+   U.8  Storage model (Hypercore / Hyperbee)
+        U.8.1  Worker & Gateway Plugin storage
 
-💡 Concepts
-   ├─ Architecture overview
-   ├─ The MDK Protocol
-   ├─ The Kernel
-   ├─ The Gateway (API boundary, auth, MCP)
-   ├─ Workers & the device-integration model
-   ├─ Storage model (Hypercore / Hyperbee)
-   ├─ Security & authentication
-   ├─ Scaling model (parallel Workers, multi-site)
-   └─ Agentic framework (Developer Skill & Operator Agent)
+🤖 Agentic MDK  (A.*)
+   A.1  Overview (Developer Skill & Operator Agent)
+   A.2  MDK Developer Skill
+   A.3  Operator Agent
+   A.4  MCP endpoint & tool derivation
+   A.5  Connect an AI agent                           → U.3.2
 
-📚 Reference
-   ├─ Package index & terminology
-   ├─ mdk-core
-   │   ├─ @tetherto/mdk-kernel
-   │   ├─ @tetherto/mdk-gateway
-   │   ├─ @tetherto/mdk-client
-   │   └─ @tetherto/mdk-worker-base
-   ├─ mdk-ui-devkit
-   │   ├─ @tetherto/mdk-ui-core
-   │   ├─ @tetherto/mdk-react-adapter
-   │   └─ @tetherto/mdk-react-devkit (component catalogue)
-   ├─ MDK Protocol (envelope & action set)
-   ├─ Schema — mdk-contract.json
-   ├─ Schema — mdk-plugin.json
-   ├─ Error codes (ERR_*)
-   ├─ Release notes
-   └─ Glossary
+📚 Reference  (R.*)
+   R.1  mdk-core
+        R.1.1  Kernel — API
+        R.1.2  Gateway — API · mdk-plugin.json schema · error codes
+        R.1.3  Client — API
+        R.1.4  Worker — API · mdk-contract.json schema · error codes
+   R.2  mdk-ui-devkit
+        R.2.1  Dashboard shell
+        R.2.2  UI Core — API
+        R.2.3  React Adapter — API
+        R.2.4  React Components — component catalogue
+        R.2.5  Fonts
+   R.3  MDK Protocol — envelope
+   R.4  Glossary
 ```
 
-**Order rationale:** newcomer-first — a first-time visitor flows top-to-bottom; an experienced developer jumps straight to Reference at the bottom.
 
+### 3.1 Design notes
+
+- **N1 — UI Devkit adapters in Reference only**
+`@tetherto/mdk-ui-core` and `@tetherto/mdk-react-adapter` live exclusively in **Reference (R.2)**. They are abstracted implementation details relevant only to specific use cases. The Understanding MDK page for mdk-ui-devkit (U.6) contains a brief conceptual overview and links to R.2.
+
+- **N2 — Fonts in Reference only**
+`@tetherto/mdk-fonts` is an optional dependency; developers may bring their own typeface. Documented only in **Reference (R.2.5)**. No dedicated Understanding MDK page — a single line in U.6 noting its existence with a link to R.2.5 is sufficient.
+
+- **N3 — Vue, Svelte, and WC adapters out of scope**
+Additional framework adapters (Vue, Svelte, Web Components) are not on the current roadmap. Do not create or stub pages for them. The only mention belongs in the **UI Core reference page (R.2.2)**: a single sentence noting that UI Core is framework-agnostic and additional framework support will be added in the future.
 ---
 
-## Appendix A: Terminology Quick-Reference
+## 4. Decisions
 
-Authoritative glossary for all pages and nav labels on the documentation site.
+### 4.1 Open — mdk-addons tier name
 
+> **Status: ⚠️ Pending** — decision needed from Gio / Ankit.
 
-| Term (canonical)         | Retired aliases                   | Package                        | Notes                                                       |
-| ------------------------ | --------------------------------- | ------------------------------ | ----------------------------------------------------------- |
-| **Kernel**               | ORK, ORK Kernel, mdk-ork          | `@tetherto/mdk-kernel`         | Orchestration engine                                        |
-| **Gateway**              | App Node, App-Node, mdk-app-node  | `@tetherto/mdk-gateway`        | API boundary; JWT/RBAC; MCP endpoint                        |
-| **MDK Client**           | —                                 | `@tetherto/mdk-client`         | Transport SDK (HRPC / IPC)                                  |
-| **Worker Base** ⚠️       | —                                 | `@tetherto/mdk-worker-base` ⚠️ | SDK for building Worker Plugins. Name pending — see §1      |
-| **Worker Plugin**        | Worker, device-worker             | `@<org>/mdk-worker-<device>`   | Integrates a device; ships `mdk-contract.json`              |
-| **Gateway Plugin**       | App Node Plugin, BE Plugin        | `@<org>/mdk-plugin-<feature>`  | Custom Gateway routes; ships `mdk-plugin.json`              |
-| **MDK-UI-Core**          | ui-client, mdk-ui-core            | `@tetherto/mdk-ui-core`        | Headless state + API client                                 |
-| **MDK-React-Adapter**    | mdk-react                         | `@tetherto/mdk-react-adapter`  | React hooks over MDK-UI-Core                                |
-| **MDK-React-Components** | mdk-react-devkit, ui-devkit-react | `@tetherto/mdk-react-devkit`   | Radix-based component library                               |
-| **MDK-Vue-Adapter**      | mdk-vue                           | `@tetherto/mdk-vue-adapter`    | Vue bindings *(planned)*                                    |
-| **mdk-contract.json**    | —                                 | —                              | Per-Worker capability + AI context declaration              |
-| **mdk-plugin.json**      | —                                 | —                              | Per-Gateway-Plugin route manifest                           |
-| **MDK Protocol**         | —                                 | —                              | Shared wire envelope (`id`, `type`, `action`, `payload`, …) |
-| **HRPC**                 | —                                 | —                              | Encrypted P2P stream transport (server ↔ server)            |
-| **IPC**                  | —                                 | —                              | Local-socket transport (same-host / testing)                |
-| **DHT topic**            | —                                 | —                              | Hyperswarm discovery channel Workers join passively         |
+The name "mdk-addons" is informal and does not signal the tier's importance as the primary extensibility mechanism.
 
 
+| Candidate                  | Assessment                                                                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **mdk-extensions** ⭐       | Established pattern — VS Code, Firefox, Chrome all use "extensions". Both Worker Plugins and Gateway Plugins extend mdk-core. Widely understood. |
+| **mdk-plugins**            | Consistent with internal terminology (Worker Plugins, Gateway Plugins). Risk: could be read as a single plugin package rather than a tier.       |
+| **mdk-addons** *(current)* | Common but informal; slightly undersells the tier.                                                                                               |
+
+
+### 4.2 Open — Client name
+
+> **Status: ⚠️ Pending** — decision needed from Gio / Ankit.
+
+"Client" is workable scoped by the package name `@tetherto/mdk-client`, but standalone it is generic. Kernel, Gateway, and Worker all communicate their role; Client does not convey that it is a **transport SDK** speaking the MDK Protocol over HRPC/IPC.
+
+
+| Candidate              | Assessment                                                                                 |
+| ---------------------- | ------------------------------------------------------------------------------------------ |
+| **Client** *(current)* | Generic but scoped by the package name. Confirmed by Gio.                                  |
+| **Connector**          | "Connect to the Kernel." More evocative; consistent with the boundary metaphor of Gateway. |
+
+
+### 4.3 Open — React Components package name
+
+> **Status: ⚠️ Pending** — decision needed from Gio / Ankit.
+
+`@tetherto/mdk-react-devkit` / "React Components" is unclear. "Devkit" reads as a developer toolkit, not a component library. The name should communicate "ready-to-use React UI components" the way **Material Components** does — someone reading it for the first time should immediately know what's inside.
+
+| Candidate | Assessment |
+|---|---|
+| **MDK React Components** / `@tetherto/mdk-react-components` ⭐ | Clearest. Directly mirrors the "Material Components" pattern. No ambiguity. |
+| **MDK React UI** / `@tetherto/mdk-react-ui` | Clean and short; "UI" is widely understood but slightly generic. |
+| **React Components** / `@tetherto/mdk-react-devkit` *(current)* | "Devkit" is ambiguous — does not signal a component library. |
+
+### 4.4 Closed — Client and Gateway cannot be merged
+
+> **Status: ✅ Resolved** — raised by Gio; decision made they must remain separate (2026-06-22).
+
+- **Client** is a *library* — a multi-language transport SDK embeddable in any custom backend, no Gateway required.
+- **Gateway** is a *deployable server* — the authenticated boundary (JWT/RBAC, MCP, plugin host) that uses Client internally.
+
+They serve different roles: Client is a dependency; Gateway is an application. Merging would force every custom backend to carry the full auth/MCP surface and would block multi-language Client support.
