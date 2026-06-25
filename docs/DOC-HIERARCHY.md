@@ -200,6 +200,7 @@ The MDK docs site uses the **[Diátaxis](https://diataxis.fr/)** framework. Tuto
 `@tetherto/mdk-fonts` is an optional dependency; developers may bring their own typeface. Documented only in **Reference (R.2.5)**. No dedicated Understanding MDK page — a single line in U.6 noting its existence with a link to R.2.5 is sufficient.
 - **N3 — Vue, Svelte, and WC adapters out of scope**
 Additional framework adapters (Vue, Svelte, Web Components) are not on the current roadmap. Do not create or stub pages for them. The only mention belongs in the **UI Core reference page (R.2.2)**: a single sentence noting that UI Core is framework-agnostic and additional framework support will be added in the future.
+- **N4 — MDK is not just for Mining, later for manange fleet of physical devices**
 
 ---
 
