@@ -148,7 +148,7 @@ The MDK docs site uses the **[Diátaxis](https://diataxis.fr/)** framework. Tuto
    4.  Build a Dashboard
        4.1  Use the UI Devkit                         → U.6
        4.2  Use Components in Dashboard Shell         → U.6.1
-       4.2  Customize UI components (3-tier CSS)      → R.2
+       4.3  Customize UI components (3-tier CSS)      → R.2
 
 💡 Understanding MDK  (U.*)
    U.1  Architecture overview
