@@ -206,8 +206,8 @@ See the demo for the current routes where proposed IA items now lands in the sit
 ##### 1. What is MDK?
 
 - maps to: `/docs/`
-- coverage: `[Partial]`
-- notes: Keep this short and orientation-led. Architecture, scaling, package detail, and agent explanation 
+- coverage: `[Supported]`
+- notes: Create a short and orientation-led page. Architecture, scaling, package detail, and agent explanation 
 should remain in canonical Explanation or Agents pages.
 - sources:
   - [index.mdx](../../content/docs/index.mdx)
@@ -219,7 +219,7 @@ should remain in canonical Explanation or Agents pages.
 
 - open question: Which user's path is the golden path?
 - maps to: `/docs/tutorials/quickstart/`
-- coverage: `[Supported]`
+- coverage: `[Supported] IF`
 - notes: Supported IF first success is to run a mock miner and control it per tutorials/backend-stack/cli/ the mock-miner loop: discover, read telemetry, set power mode, verify. Currently hidden as 2 in a rung (run ORK being 1).
 - sources:
   - [tutorials/quickstart.mdx](../../content/docs/tutorials/quickstart.mdx)
@@ -235,9 +235,8 @@ should remain in canonical Explanation or Agents pages.
 ##### 1. Deploy MDK
 
 - maps to: `/docs/guides/deploy-mdk/`
-- coverage: `[Partial]`
-- notes: Deployment overview and decision material exists, but the proposed guide set is
-  incomplete: multi-kernel deployment still needs a tested procedure
+- coverage: `[Supported]`
+- notes: Deployment overview and decision material exists but needs short
 - sources:
   - [guides/deploy-mdk/index.mdx](../../content/docs/guides/deploy-mdk/index.mdx)
   - [how-to/deployment/index.mdx](../../content/archived/v0-4-0/how-to/deployment/index.mdx)
