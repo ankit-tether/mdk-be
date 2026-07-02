@@ -3,6 +3,8 @@
 > **Version:** 0.2.0  |  **Date:** 2026-07-02  |  **Status:** Draft
 >
 > The Worker-side mirror of `[hld-app-node-plugins.md](./hld-app-node-plugins.md)`: a manifest + plain-JS handlers, no framework or business logic.
+>
+> **Inspired by:** [Workers in MDK: a simpler model](https://docs.google.com/document/d/19wfo0RNVPyPBBE4tbGTvdOjmbauBBkCUVE3go3WFY3k/edit?tab=t.0) (Google Doc).
 
 ## 1. The model
 
@@ -144,7 +146,7 @@ The worker stays single-device and logic-free — while giving vendors a natural
 ## References
 
 - `[hld-app-node-plugins.md](./hld-app-node-plugins.md)` — the mirrored pattern.
-- `"Workers in MDK: a simpler model.md"` — the "contract + thin translation" premise.
+- `"Workers in MDK: a simpler model.md"` — the "contract + thin translation" premise ([source Google Doc](https://docs.google.com/document/d/19wfo0RNVPyPBBE4tbGTvdOjmbauBBkCUVE3go3WFY3k/edit?tab=t.0)).
 - `[mdk-contract.json](./mdk-contract.json)` / `[mdk-contract.schema.json](./mdk-contract.schema.json)` — manifest, extended with `handler`.
 - `[hld.md](./hld.md)` §4.4.2 — the `onCommand` model being replaced.
 
