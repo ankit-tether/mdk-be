@@ -15,11 +15,11 @@ The result: worker code is dumb by construction. A handler that only sees one de
 
 ---
 
-
-
 ## 2. Symmetry with Gateway Plugins
 
-`[hld-app-node-plugins.md](./hld-app-node-plugins.md)` replaced a hardcoded route table with a manifest + one handler per route. Workers still use the older pattern — one `onCommand` switch per worker. This applies the same fix on the other side of the Kernel:
+Instead of one `onCommand` switch handling every action, a worker exposes **one entry point per action or capability** — each command and each telemetry channel in `mdk-contract.json` points at its own small handler file. 
+
+This is the exact model Gateway Plugins already use: `[hld-app-node-plugins.md](./hld-app-node-plugins.md)` declares each route in a manifest and points it at its own handler, rather than a hardcoded route table. The two sides of the Kernel end up mirror images:
 
 
 |                     | Gateway Plugin           | Worker (this proposal)               |
@@ -28,13 +28,14 @@ The result: worker code is dumb by construction. A handler that only sees one de
 | Unit of work        | one route                | one command or telemetry entry       |
 | Handler             | `(req) => result`        | `(req) => result`                    |
 | Sanctioned I/O      | `mdk-client` → Kernel    | device client → device               |
-| Framework knowledge | none (Adapter owns HTTP) | none (Worker base owns MDK Protocol) |
+| Framework knowledge | none (Adapter owns HTTP) | none (Worker runtime owns MDK Protocol) |
+| Host                | Gateway loads the plugin | Worker runtime loads the contract + handlers |
 | Aggregates?         | **Yes — its job**        | **No — one device per instance**     |
+
+**No more Worker Base.** Since a Worker Plugin is no longer subclassed, the `WorkerBase` you `extends` (the model in [`proposal/06-worker.md` §5](./proposal/06-worker.md)) is retired. It is replaced by a new **Worker runtime** — a generic host that *loads* a Worker Plugin (its `mdk-contract.json` + handlers) and wraps around all the shared logic the plugin no longer contains: worker discovery (joining the DHT topic), the ORK/Kernel connection, answering `identity`/`capability`/`health` pulls, dispatching each `command.request` to the right handler, and MDK Protocol envelope wrapping. Same relationship as the Gateway to a Gateway Plugin: the plugin is loaded, not inherited.
 
 
 ---
-
-
 
 ## 3. Manifest
 
@@ -63,47 +64,52 @@ The result: worker code is dumb by construction. A handler that only sees one de
 }
 ```
 
-At boot the Worker base reads the manifest, eagerly `require()`s every `handler`, and aborts on a missing module or non-function export.
+At boot the Worker runtime reads the manifest, eagerly `require()`s every `handler`, and aborts on a missing module or non-function export.
 
 ---
 
-
-
 ## 4. Handler contract
 
-A plain async function: takes a `WorkerActionRequest`, returns a `WorkerActionResult`.
+A plain async function: takes `params`, returns any serializable value (the Worker runtime wraps it into the MDK Protocol envelope). `params` is the schema-validated inputs for this action — the only per-call data — and is empty for telemetry or parameterless commands.
 
+Since a worker instance owns exactly one device — it is an ambient singleton the handler imports, exactly as a Gateway Plugin handler imports `@tetherto/mdk-client`:
 
-| Type                  | Shape                  | Notes                                                                                             |
-| --------------------- | ---------------------- | ------------------------------------------------------------------------------------------------- |
-| `WorkerActionRequest` | `{ device, params }`   | `device` is the connected single-device client, wired once at boot. `params` is schema-validated. |
-| `WorkerActionResult`  | any serializable value | Worker base wraps it into the MDK Protocol envelope.                                              |
+```js
+// src/device.js — the single connected device client, wired once at boot
+const grpc = require('@braiins/bos-plus-api') // vendor SDK
 
+const device = grpc.connect({
+  host: process.env.DEVICE_IP,   // one worker instance = one device
+  port: process.env.DEVICE_PORT, // e.g. 50051
+  token: process.env.DEVICE_TOKEN
+})
+
+module.exports = device
+```
 
 ```js
 // src/commands/setPowerLimit.js
+const device = require('../device')
 
-module.exports = async ({ device, params }) => {
+module.exports = async (params) => {
   await device.advancedSettings.setPowerTarget({ watts: params.limit_watts })
   return { watts: params.limit_watts, ok: true }
 }
 ```
 
-No `deviceId` routing (one device per instance) and no protocol import — that stays in the Worker base, as HTTP stays in the Gateway's Adapter.
+
 
 ---
-
-
 
 ## 5. Where aggregation goes instead
 
 ```mermaid
 flowchart LR
-    W1["braiins-worker (AM001)"] --> K
-    W2["braiins-worker (AM002)"] --> K
-    W3["whatsminer-worker (WM001)"] --> K
-    K["Kernel — routes by deviceId"] --> GP
-    GP["Gateway Plugin\n(only place aggregation lives)"] -->|"site rollups, fleet stats"| C["UI / AI Agent"]
+    W1["braiins-worker (AM001)"] --> Kernel
+    W2["braiins-worker (AM002)"] --> Kernel
+    W3["whatsminer-worker (WM001)"] --> Kernel
+    Kernel["Kernel — routes by deviceId"] --> GatewayPlugin
+    GatewayPlugin["Gateway Plugin\n(only place aggregation lives)"] -->|"site rollups, fleet stats"| Consumer["UI / AI Agent"]
 ```
 
 
@@ -117,7 +123,7 @@ Already the documented path — `hld-app-node-plugins.md` [§5.2](./hld-app-node
 Because the worker is deliberately dumb, "device support in MDK" is not one package — it is a **pair**, and a vendor ships both together:
 
 - **Worker Plugin** (`@vendor/mdk-worker-<device>`) — the single-device translation layer + `mdk-contract.json`.
-- **Gateway Plugin** (`@vendor/mdk-plugin-<device>`) — optional; cross-instance aggregated rollups over the vendor's own fleet of same-type devices (e.g. total hashrate, average outlet temperature, count offline), plus any convenience endpoints for that fleet of device class. 
+- **Gateway Plugin** (`@vendor/mdk-plugin-<device>`) — optional; cross-instance aggregated rollups over the vendor's own fleet of same-type devices (e.g. total hashrate, average outlet temperature, count offline), plus any convenience endpoints for that fleet of device class.
 
 A vendor onboarding their hardware ships both as one distributable bundle so an operator installs support in a single step.
 
