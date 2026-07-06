@@ -17,6 +17,8 @@ The result: worker code is dumb by construction. A handler that only sees one de
 
 ---
 
+
+
 ## 2. Symmetry with Gateway Plugins
 
 Instead of one `onCommand` switch handling every action, a worker exposes **one entry point per action or capability** — each command and each telemetry channel in `mdk-contract.json` points at its own small handler file. 
@@ -24,20 +26,22 @@ Instead of one `onCommand` switch handling every action, a worker exposes **one 
 This is the exact model Gateway Plugins already use: `[hld-app-node-plugins.md](./hld-app-node-plugins.md)` declares each route in a manifest and points it at its own handler, rather than a hardcoded route table. The two sides of the Kernel end up mirror images:
 
 
-|                     | Gateway Plugin           | Worker (this proposal)               |
-| ------------------- | ------------------------ | ------------------------------------ |
-| Manifest            | `mdk-plugin.json`        | `mdk-contract.json`                  |
-| Unit of work        | one route                | one command or telemetry entry       |
-| Handler             | `(req) => result`        | `(req) => result`                    |
-| Sanctioned I/O      | `mdk-client` → Kernel    | device client → device               |
-| Framework knowledge | none (Adapter owns HTTP) | none (Worker runtime owns MDK Protocol) |
+|                     | Gateway Plugin           | Worker (this proposal)                       |
+| ------------------- | ------------------------ | -------------------------------------------- |
+| Manifest            | `mdk-plugin.json`        | `mdk-contract.json`                          |
+| Unit of work        | one route                | one command or telemetry entry               |
+| Handler             | `(req) => result`        | `(req) => result`                            |
+| Sanctioned I/O      | `mdk-client` → Kernel    | device client → device                       |
+| Framework knowledge | none (Adapter owns HTTP) | none (Worker runtime owns MDK Protocol)      |
 | Host                | Gateway loads the plugin | Worker runtime loads the contract + handlers |
-| Aggregates?         | **Yes — its job**        | **No — one device per instance**     |
+| Aggregates?         | **Yes — its job**        | **No — one device per instance**             |
 
-**No more Worker Base.** Since a Worker Plugin is no longer subclassed, the `WorkerBase` you `extends` (the model in [`proposal/06-worker.md` §5](./proposal/06-worker.md)) is retired. It is replaced by a new **Worker runtime** — a generic host that *loads* a Worker Plugin (its `mdk-contract.json` + handlers) and wraps around all the shared logic the plugin no longer contains: worker discovery (joining the DHT topic), the ORK/Kernel connection, answering `identity`/`capability`/`health` pulls, dispatching each `command.request` to the right handler, and MDK Protocol envelope wrapping. Same relationship as the Gateway to a Gateway Plugin: the plugin is loaded, not inherited.
 
+**No more Worker Base.** Since a Worker Plugin is no longer subclassed, the `WorkerBase` you `extends` (the model in `proposal/06-worker.md` [§5](./proposal/06-worker.md)) is retired. It is replaced by a new **Worker runtime** — a generic host that *loads* a Worker Plugin (its `mdk-contract.json` + handlers) and wraps around all the shared logic the plugin no longer contains: worker discovery (joining the DHT topic), the ORK/Kernel connection, answering `identity`/`capability`/`health` pulls, dispatching each `command.request` to the right handler, and MDK Protocol envelope wrapping. Same relationship as the Gateway to a Gateway Plugin: the plugin is loaded, not inherited.
 
 ---
+
+
 
 ## 3. Manifest
 
@@ -70,6 +74,8 @@ At boot the Worker runtime reads the manifest, eagerly `require()`s every `handl
 
 ---
 
+
+
 ## 4. Handler contract
 
 A plain async function: takes `params`, returns any serializable value (the Worker runtime wraps it into the MDK Protocol envelope). `params` is the schema-validated inputs for this action — the only per-call data — and is empty for telemetry or parameterless commands.
@@ -99,9 +105,9 @@ module.exports = async (params) => {
 }
 ```
 
-
-
 ---
+
+
 
 ## 5. Where aggregation goes instead
 
@@ -119,6 +125,8 @@ flowchart LR
 Already the documented path — `hld-app-node-plugins.md` [§5.2](./hld-app-node-plugins.md#52-cross-worker-aggregation) has the Gateway Plugin fan out via `mdk-client` across `deviceIds`. The only change: it becomes the *sole* place aggregation happens. No worker-level Manager rolls up a device pool; a fleet stat is computed by a Gateway Plugin after fanning out to individual single-device workers — the same path as cross-site aggregation (§5.3).
 
 ---
+
+
 
 ## 6. Vendor bundle: Worker Plugin + Gateway Plugin
 
@@ -142,6 +150,18 @@ flowchart TB
 The worker stays single-device and logic-free — while giving vendors a natural home for the "must-have" aggregation their device needs.
 
 ---
+
+## Open Questions: 
+
+1. how does many workers be running? 
+
+2. how does alert work?? (Later)
+
+3. aggregating across many workers? 
+
+4. how to migrate workers? 
+
+
 
 ## References
 
