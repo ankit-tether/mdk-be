@@ -78,7 +78,7 @@
 ### Key Question
 
 - **Workers monorepo layout:** Align with Hemant — do we still need a `base/` folder per device-type vertical (`miners/`, `containers/`, …), or can we flatten that? Clarify what that layer buys us before locking `mdk-libraries.md` (monorepo section).
-- Talk to Parag and build MDK Coding Agent Skill from Parag's exising work (Robert may have some suggestion, not clear tho!) along with Harrie's doc
+- ~~Talk to Parag and build MDK Coding Agent Skill from Parag's exising work (Robert may have some suggestion, not clear tho!) along with Harrie's doc~~
 
 ---
 
@@ -105,7 +105,7 @@
 4. add precommit hoooks to avoid pushing any bad code
 5. what is this mock-control-service?
 6. move all back to one template folder / package
-7. should rename app node to gateway
+7. ~~should rename app node to gateway~~
 
 __
 
@@ -152,7 +152,7 @@ __
 
 [https://github.com/aws/agent-toolkit-for-aws/](https://github.com/aws/agent-toolkit-for-aws/)
 
-[https://smithy.io/](https://smithy.io/)
+[>>>>Important : Check  https://smithy.io/](https://smithy.io/)
 
 [https://github.com/awslabs/cli-agent-orchestrator](https://github.com/awslabs/cli-agent-orchestrator)
 
@@ -161,3 +161,13 @@ __
 create code agent specfic plugin to served to their marketplace native
 
 doc for cli 
+
+1. check with other tool in tether is they use same thing for skill, if not we need to share org wide
+2. what extra context that site needs to expose
+3. how to strcutre the BUILD MDK context from devs
+4. create MVP for dev skills
+5. how to allow multiple transport ORK<>Worker / Multiple Language / Multiple Storage
+6. UI Docs catalog should be hosted and routed from doc
+7. ~~Share list of work you are doing so ana can create tasks~~
+
+__

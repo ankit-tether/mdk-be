@@ -8,7 +8,7 @@
 
 ## 1. Canonical Component Naming
 
-> **One naming decision remains open** — the `UI Core` package name (`@tetherto/mdk-ui-core`). See §4.5. All other component names are confirmed.
+> **All component names are confirmed.** No open naming decisions remain.
 
 
 | Retired Name | Canonical Name | Package                 |
@@ -39,7 +39,7 @@ MDK Platform
 │   └── Gateway Plugins   @<org>/mdk-plugin-<feature>       — controllers + mdk-plugin.json
 │
 └── mdk-ui-devkit     [Built by Tether — optional frontend layer]
-    ├── UI Core ⚠️         @tetherto/mdk-ui-core             — name pending (see §4.5)
+    ├── UI Foundation      @tetherto/mdk-ui-foundation
     ├── React Adapter      @tetherto/mdk-react-adapter
     ├── React Components   @tetherto/mdk-react-components
     └── Fonts              @tetherto/mdk-fonts          
@@ -56,7 +56,7 @@ MDK Platform
 flowchart TD
     subgraph DEVKIT["mdk-ui-devkit · optional"]
         direction TB
-        RC["MDK React Components"] --> RA["React Adapter"] --> UIF["UI Foundation ⚠️"]
+        RC["MDK React Components"] --> RA["React Adapter"] --> UIF["UI Foundation"]
     end
 
     subgraph CONSUMERS["Consumers"]
@@ -118,8 +118,8 @@ flowchart TD
 | mdk-core       | **Worker**               | `@tetherto/mdk-worker`           | Base for device integrations. Provides MDK Protocol plumbing; implement `onTelemetryPull` / `onCommand`.                                 |
 | mdk-extensions | **Worker Plugin**        | `@<org>/mdk-worker-<device>`     | Subclasses Worker, ships an `mdk-contract.json`. Integrates a physical device or external service.                                       |
 | mdk-extensions | **Gateway Plugin**       | `@<org>/mdk-plugin-<feature>`    | Plain-JS controllers + `mdk-plugin.json`; loaded into the Gateway at boot. Adds custom HTTP/WS endpoints.                                |
-| mdk-ui-devkit  | **UI Core** ⚠️           | `@tetherto/mdk-ui-core`          | Headless state + API client; framework-agnostic. Telemetry buffering, optimistic UI, stale detection. Name pending — see §4.5.           |
-| mdk-ui-devkit  | **React Adapter**        | `@tetherto/mdk-react-adapter`    | React hooks (`useTelemetry`, `useCommand`) over UI Core.                                                                                 |
+| mdk-ui-devkit  | **UI Foundation**        | `@tetherto/mdk-ui-foundation`    | Headless state + API client; framework-agnostic. Telemetry buffering, optimistic UI, stale detection.                                    |
+| mdk-ui-devkit  | **React Adapter**        | `@tetherto/mdk-react-adapter`    | React hooks (`useTelemetry`, `useCommand`) over UI Foundation.                                                                           |
 | mdk-ui-devkit  | **MDK React Components** | `@tetherto/mdk-react-components` | Radix-based component library; 3-tier CSS customization, no Tailwind dependency.                                                         |
 | mdk-ui-devkit  | **Fonts**                | `@tetherto/mdk-fonts`            | Shared typeface bundle for MDK UI surfaces.                                                                                              |
 
@@ -184,7 +184,7 @@ The MDK docs site uses the **[Diátaxis](https://diataxis.fr/)** framework. Tuto
         R.1.4  Worker — API · mdk-contract.json schema · error codes
    R.2  mdk-ui-devkit
         R.2.1  Dashboard shell
-        R.2.2  UI Core — API
+        R.2.2  UI Foundation — API
         R.2.3  React Adapter — API
         R.2.4  React Components — component catalogue
         R.2.5  Fonts
@@ -194,13 +194,14 @@ The MDK docs site uses the **[Diátaxis](https://diataxis.fr/)** framework. Tuto
 
 ### 3.1 Design notes
 
-- **N1 — UI Devkit adapters in Reference only**
-`@tetherto/mdk-ui-core` (UI Core — name pending §4.5) and `@tetherto/mdk-react-adapter` live exclusively in **Reference (R.2)**. They are abstracted implementation details relevant only to specific use cases. The Understanding MDK page for mdk-ui-devkit (U.6) contains a brief conceptual overview and links to R.2.
+**N1 — UI Devkit adapters in Reference only**
+`@tetherto/mdk-ui-foundation` (UI Foundation) and `@tetherto/mdk-react-adapter` live exclusively in **Reference (R.2)**. They are abstracted implementation details relevant only to specific use cases. The Understanding MDK page for mdk-ui-devkit (U.6) contains a brief conceptual overview and links to R.2.
 - **N2 — Fonts in Reference only**
 `@tetherto/mdk-fonts` is an optional dependency; developers may bring their own typeface. Documented only in **Reference (R.2.5)**. No dedicated Understanding MDK page — a single line in U.6 noting its existence with a link to R.2.5 is sufficient.
 - **N3 — Vue, Svelte, and WC adapters out of scope**
-Additional framework adapters (Vue, Svelte, Web Components) are not on the current roadmap. Do not create or stub pages for them. The only mention belongs in the **UI Core reference page (R.2.2)**: a single sentence noting that UI Core is framework-agnostic and additional framework support will be added in the future.
-- **N4 — MDK is not just for Mining, later for manange fleet of physical devices**
+Additional framework adapters (Vue, Svelte, Web Components) are not on the current roadmap. Do not create or stub pages for them. The only mention belongs in the **UI Foundation reference page (R.2.2)**: a single sentence noting that UI Core is framework-agnostic and additional framework support will be added in the future.
+**N4 — MDK is domain-agnostic; avoid mining-specific language**
+MDK is a general-purpose framework for managing fleets of physical devices. The docs site must not frame it as a mining tool. Use domain-neutral examples and terminology (e.g. "devices" not "miners", "fleet" not "mine"). Mining may be used as one illustrative example but must never be the primary framing.
 
 ---
 
@@ -210,19 +211,19 @@ Additional framework adapters (Vue, Svelte, Web Components) are not on the curre
 
 > **Status: ✅ Resolved** — 2026-06-25.
 
-**Decision:** rename `mdk-addons` to `**mdk-extensions`**. Matches the established pattern used by VS Code, Firefox, and Chrome; clearly signals that both Worker Plugins and Gateway Plugins *extend* mdk-core.
+**Decision:** rename `mdk-addons` to **`mdk-extensions`**. Matches the established pattern used by VS Code, Firefox, and Chrome; clearly signals that both Worker Plugins and Gateway Plugins *extend* mdk-core.
 
 ### 4.2 Closed — Client name stays as Client
 
 > **Status: ✅ Resolved** — 2026-06-25.
 
-**Decision:** keep `**Client*`* / `@tetherto/mdk-client`. Scoped unambiguously by the package name; no rename needed.
+**Decision:** keep **`Client`** / `@tetherto/mdk-client`. Scoped unambiguously by the package name; no rename needed.
 
 ### 4.3 Closed — React Components package name → mdk-react-components
 
 > **Status: ✅ Resolved** — 2026-06-25.
 
-**Decision:** rename `@tetherto/mdk-react-devkit` to `**@tetherto/mdk-react-components`**, display name **MDK React Components**. Directly mirrors the Material Components pattern — the name alone tells you what's inside.
+**Decision:** rename `@tetherto/mdk-react-devkit` to **`@tetherto/mdk-react-components`**, display name **MDK React Components**. Directly mirrors the Material Components pattern — the name alone tells you what's inside.
 
 ### 4.4 Closed — Client and Gateway cannot be merged
 
@@ -233,18 +234,10 @@ Additional framework adapters (Vue, Svelte, Web Components) are not on the curre
 
 They serve different roles: Client is a dependency; Gateway is an application. Merging would force every custom backend to carry the full auth/MCP surface and would block multi-language Client support.
 
-### 4.5 Open — UI Core name
+### 4.5 Closed — UI Core name → UI Foundation
 
-> **Status: ⚠️ Pending** — Decision needed from team.
+> **Status: ✅ Resolved** — 2026-07-06.
 
-`@tetherto/mdk-ui-core` / "UI Core" risks confusion with the **mdk-core** tier. A reader may assume `mdk-ui-core` is part of mdk-core, when it belongs to `mdk-ui-devkit`.
-
-
-| Candidate                                           | Assessment                                                                                    |
-| --------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| **UI Foundation** / `@tetherto/mdk-ui-foundation` ⭐ | Clear: it is the base layer that all framework adapters build on. No overlap with "mdk-core". |
-| **UI Engine** / `@tetherto/mdk-ui-engine`           | Captures the active state-management role; slightly more technical.                           |
-| **UI Runtime** / `@tetherto/mdk-ui-runtime`         | Accurate — it manages live telemetry state — but "runtime" may feel heavy for a UI library.   |
-| **UI Core** / `@tetherto/mdk-ui-core` *(current)*   | Short, but "core" clashes with the mdk-core tier name.                                        |
+**Decision:** rename `@tetherto/mdk-ui-core` to **`@tetherto/mdk-ui-foundation`**, display name **UI Foundation**. "Core" clashed with the mdk-core tier; "Foundation" clearly signals it is the base layer that all framework adapters build on.
 
 
