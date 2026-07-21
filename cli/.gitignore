@@ -1,6 +1,0 @@
-node_modules/
-dist/
-*.log
-
-# Scaffold output produced by `mdk onboard`
-mdk.yaml
