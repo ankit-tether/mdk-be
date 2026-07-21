@@ -354,10 +354,10 @@ Agents read this once to discover the entire surface without spawning `--help` p
 
 ## 8. Open Questions
 
-- **Runtime device add/remove.** How devices are attached to or detached from a running worker is **not decided**. Devices are intentionally **not** part of `mdk.yaml`, and there is no `add device` / `remove device` command today. 
+- **Runtime device add/remove.** How devices are attached to or detached from a running worker is **not decided**. Devices are intentionally **not** part of `mdk.yaml`, and there is no `add device` / `remove device` command today.
 
-Potential solution: 
-UI will expose forms to add/remove devices. We do not want the device structure to be same for all workers and impose that to the plugin developers. Rather than that, the entire device config is passed to the worker when it changed, and the worker automatically handles it via worker runtime. 
+  **Potential solution:** the UI exposes forms to add/remove devices. We do not want to impose a single device structure on all workers (and thereby on plugin developers); instead, the entire device config is passed to the worker whenever it changes, and the worker handles it automatically via the Worker Runtime.
+
 ---
 
 ## 9. References
