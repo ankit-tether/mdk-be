@@ -114,15 +114,15 @@ Every command inherits these:
 #### Group C — Run & manage (kubectl-like)
 
 
-| Command                          | Purpose                                                                                                                                                                                                                                                                                                                                                                          |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mdk run [target]`               | • Start the stack from the spec (`mdk.yaml`, §5.3). • **Single-process:** `mdk run` (alias `mdk run all`) boots the Kernel, Gateway, and every worker in one process. • **Multi-process:** each component runs as its own process: `mdk run kernel`, `mdk run gateway`, and `mdk run worker <name>` per worker instance. • `mdk onboard` prints these exact commands at the end. |
-| `mdk get <resource>`             | • List live resources from the Kernel/Gateway: `workers` (instances), `devices` (registered deviceIds + owning instance), `plugins`, `contexts`. • Read-only; honors `-o`.                                                                                                                                                                                                       |
-| `mdk describe <resource> <name>` | • Detailed view including declared capabilities, `mdk-contract.json`, and registration state.                                                                                                                                                                                                                                                                                    |
-| `mdk logs <target>`              | • Stream logs for a service or worker. • Flags: `-f/--follow`, `--since`, `--tail <n>`.                                                                                                                                                                                                                                                                                          |
-| `mdk status`                     | • One-shot check of the current environment **and** every component. • Environment: Node 20+, package manager. • Stack: which layers (Kernel/Gateway/workers) are up, worker/device counts, per-component liveness/readiness (maps to the Kernel Health Monitor, `[hld.md](./hld.md)` §4.3.1), and aggregate health. • Read-only: reports, never repairs.                        |
-| `mdk apply -f <file>`            | • Declarative, idempotent reconcile from the spec (`mdk.yaml`, §5.3). • Diff desired vs running; restart only the worker instances whose config changed (§5.4).                                                                                                                                                                                                                  |
-| `mdk diff -f <file>`             | • Preview what `apply` would change (which instances restart because their config changed) without touching the running stack.                                                                                                                                                                                                                                                   |
+| Command                          | Purpose                                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mdk run [target]`               | • Start the stack from the spec (`mdk.yaml`, §5.3). •- **Single-process:** `mdk run` (alias `mdk run all`) boots the Kernel, Gateway, and every worker in one process. • - **Multi-process:** each component runs as its own process: `mdk run kernel`, `mdk run gateway`, and `mdk run worker <name>` per worker instance. • `mdk onboard` prints these exact commands at the end. |
+| `mdk get <resource>`             | • List live resources from the Kernel/Gateway: `workers` (instances), `devices` (registered deviceIds + owning instance), `plugins`, `contexts`. • Read-only; honors `-o`.                                                                                                                                                                                                             |
+| `mdk describe <resource> <name>` | • Detailed view including declared capabilities, `mdk-contract.json`, and registration state.                                                                                                                                                                                                                                                                                          |
+| `mdk logs <target>`              | • Stream logs for a service or worker. • Flags: `-f/--follow`, `--since`, `--tail <n>`.                                                                                                                                                                                                                                                                                                |
+| `mdk status`                     | • One-shot check of the current environment **and** every component. • Environment: Node 20+, package manager. • Stack: which layers (Kernel/Gateway/workers) are up, worker/device counts, per-component liveness/readiness (maps to the Kernel Health Monitor, `[hld.md](./hld.md)` §4.3.1), and aggregate health. • Read-only: reports, never repairs.                              |
+| `mdk apply -f <file>`            | • Declarative, idempotent reconcile from the spec (`mdk.yaml`, §5.3). • Diff desired vs running; restart only the worker instances whose config changed (§5.4).                                                                                                                                                                                                                        |
+| `mdk diff -f <file>`             | • Preview what `apply` would change (which instances restart because their config changed) without touching the running stack.                                                                                                                                                                                                                                                         |
 
 
 
@@ -243,11 +243,7 @@ flowchart TD
 
 ---
 
-
-
 ## 5. CLI Internal Architecture
-
-
 
 ### 5.1 Package & tech stack
 
@@ -266,7 +262,7 @@ Env (`MDK_*`) → global config (`~/.mdk/`) holds named Gateway contexts plus th
 ### 5.3 Stack spec (`mdk.yaml`) — workers, instances & plugin config
 
 - The stack is described declaratively in one file (`mdk.yaml`). It captures the **logical** stack; `mode` selects how those components are wrapped in OS processes (single vs multi), without changing the spec's shape — so graduating from single to multi-process is a one-line change.  
-- Each Worker Plugin and each Gateway plugin carries a `config` block. The CLI treats `config` as **opaque and plugin-defined**: the *plugin developer* decides which keys it accepts and the CLI passes it through to the runtime unchanged. The keys below are just what these particular plugins happen to accept — another plugin might take a connection string, a polling interval, or nothing at all.
+- Each Worker Plugin and each Gateway plugin carries a `config` block. The CLI treats `config` as **opaque and plugin-defined**: the *plugin developer* decides which keys it accepts and the CLI passes it through to the runtime unchanged. `config` holds only what the worker or plugin itself needs to operate — intervals, batch sizes, thresholds, log levels, feature flags — never device details like IPs or tokens. The keys below are just what these particular plugins happen to accept; another plugin might take a polling interval, a batch size, or nothing at all.
 
 ```yaml
 apiVersion: mdk/v1
@@ -289,18 +285,15 @@ spec:
       port: 3850
       config:
         pollIntervalMs: 2000
-        devices:
-          - { id: wm001, host: 10.0.4.11, port: 50051, token: "${T_WM001}" }
-          - { id: wm002, host: 10.0.4.12, port: 50051, token: "${T_WM002}" }
-          - { id: wm003, host: 10.0.4.13, port: 50051, token: "${T_WM003}" }
+        batchSize: 50
+        logLevel: info
     - name: miners-b
       package: "@org/mdk-worker-miner"
       port: 3852
       config:
-        pollIntervalMs: 2000
-        devices:
-          - { id: wm004, host: 10.0.5.11, port: 50051, token: "${T_WM004}" }
-          - { id: wm005, host: 10.0.5.12, port: 50051, token: "${T_WM005}" }
+        pollIntervalMs: 5000
+        batchSize: 100
+        logLevel: warn
 ```
 
 
@@ -310,15 +303,13 @@ spec:
 A worker's `config` is **fixed at the runtime's construction**. `mdk` still gives a kubectl-style live experience through **declarative reconciliation**:
 
 - `mdk apply -f mdk.yaml` diffs the desired spec against what's running and acts **only on what changed**, at worker-instance granularity.
-- **Every change is a config edit.** There is no device-level command; to change what an instance drives, edit its `config` in `mdk.yaml` and `mdk apply`. That one instance restarts — its channel to the Kernel drops briefly and re-registers,  keeping the blip small and the Kernel refreshing its registry (and the Gateway MCP) on re-registration.
+- **Every change is a config edit.** To change an instance's behavior, edit its `config` in `mdk.yaml` and run `mdk apply`. That one instance restarts — its channel to the Kernel drops briefly and re-registers,  keeping the blip small and the Kernel refreshing its registry (and the Gateway MCP) on re-registration.
 - **Adding capacity as a *new* instance causes no disruption** to existing instances, so the low-impact path for growth is "add another instance" rather than "grow an existing one."
 - `mdk diff -f` previews the blast radius (which instances restart) before anything happens.
 
 Blast radius is therefore always a single worker instance, never the whole stack, and the flow is identical whether a human edits `mdk.yaml` by hand or an agent runs `mdk apply`.
 
 ---
-
-
 
 ## 6. Agent-First Design
 
@@ -343,8 +334,6 @@ An LLM operating a live fleet uses **MCP**, not `mdk`. `mdk`'s job is to help *b
 
 Agents read this once to discover the entire surface without spawning `--help` per command or scraping text. The manifest carries its own `version` so agents can pin to a known shape.
 
-
-
 ### 6.3 Relationship to the Developer Skill
 
 `mdk` and the Developer Skill suite are complementary:
@@ -354,19 +343,24 @@ Agents read this once to discover the entire surface without spawning `--help` p
 
 ---
 
-
-
 ## 7. Distribution & Versioning
 
 - **Install:** zero-install via `npx @tetherto/mdk-cli …`, or `npm i -g @tetherto/mdk-cli` for the `mdk` cli. The `mdk onboard` path is the recommended first touch.
 - **Versioning:** `mdk` is versioned to track the MDK release line. `mdk version` prints both the CLI version.
 - **Update nudge:** `mdk` may print (never block on) a notice when a newer version targeting the same MDK line is available.
-- **Analytics:** is integrated in the CLI to understand the user behaviour and journey, to improve the system. 
+- **Analytics:** is integrated in the CLI to understand the user behaviour and journey, to improve the system.
 
 ---
 
+## 8. Open Questions
 
-## 8. References
+- **Runtime device add/remove.** How devices are attached to or detached from a running worker is **not decided**. Devices are intentionally **not** part of `mdk.yaml`, and there is no `add device` / `remove device` command today. 
+
+Potential solution: 
+UI will expose forms to add/remove devices. We do not want the device structure to be same for all workers and impose that to the plugin developers. Rather than that, the entire device config is passed to the worker when it changed, and the worker automatically handles it via worker runtime. 
+---
+
+## 9. References
 
 **External standards & inspirations**
 
