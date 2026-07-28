@@ -100,13 +100,14 @@ Every command inherits these:
 
 
 
-#### Group B — Scaffold (backend only)
+#### Group B — Scaffold
 
 
 | Command                    | Purpose                                                                                                                                                                |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `mdk create worker <name>` | • Scaffold a Worker Plugin package. • Emits an example `mdk-contract.json` with a `handler` per command/telemetry entry. • Includes matching per-action handler stubs. |
 | `mdk create plugin <name>` | • Scaffold a Gateway Plugin. • `mdk-plugin.json` manifest plus a plain-JS controller stub.                                                                             |
+| `mdk create dashboard`     | • Scaffold the MDK Next.js dashboard (the same starter `onboard` offers). • Wires it to the Gateway and seeds it from the bundled component registry (§5.5) that the `mdk-ui-component` skill builds from.                                    |
 
 
 
@@ -308,6 +309,14 @@ A worker's `config` is **fixed at the runtime's construction**. `mdk` still give
 - `mdk diff -f` previews the blast radius (which instances restart) before anything happens.
 
 Blast radius is therefore always a single worker instance, never the whole stack, and the flow is identical whether a human edits `mdk.yaml` by hand or an agent runs `mdk apply`.
+
+### 5.5 Bundled UI component registry
+
+Both `mdk onboard` (UI dashboard step) and `mdk create dashboard` scaffold the MDK Next.js starter. To make that dashboard buildable by a coding agent, the CLI ships a **component registry** — `registry.json`, generated from `@tetherto/mdk-react-devkit` — the machine-readable catalog of every available UI component (name, path, description, `tier`/`agent-ready`, category, props).
+
+- **Location.** For now it lives in the CLI package folder (e.g. `cli/registry.json`); it may later be resolved from the devkit version a project pins.
+- **Who uses it.** The scaffolded dashboard and the `mdk-ui-component` skill read it to know which components exist and how to bind them — the skill selects from this catalog rather than inventing component names or props.
+- **Versioning.** The registry carries its own `version` and `packageVersion`, so the dashboard and skill can pin to a known component set and it can be regenerated from the devkit.
 
 ---
 
