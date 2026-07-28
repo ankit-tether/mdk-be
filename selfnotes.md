@@ -11,7 +11,9 @@
 ### Open Questions
 
 - ~~**MCP vs CLI:** How would an AI Agent use ORK? Define the canonical integration path.~~ — **Resolved.** MCP chosen; rationale + comparison documented in `hld-agentic-framework.md` §3.4.
-- ~~**Agent-Generated UI:** Can agents generate UI dynamically using the `@tetherto/mdk-ui-devkit-react` component library?~~ — **Resolved.** Yes — Operator Agent selects from a visualization catalogue and the contract-driven UI renderer materialises it. See `hld-agentic-framework.md` §3.5, §3.7.
+- ~~**Agent-Generated UI:** Can agents generate UI dynamically using the~~ `@tetherto/mdk-ui-devkit-react` ~~component library?~~ — **Resolved.** Yes — Operator Agent selects from a visualization catalogue and the contract-driven UI renderer materialises it. See `hld-agentic-framework.md` §3.5, §3.7.
+
+
 
 ### To-Do
 
@@ -21,6 +23,8 @@
   - ~~Example use-case: *"Take action"~~* — covered as Use Case B in HLD; demo: `set_power_limit_to_miner.mov`.
 
 ---
+
+
 
 ## 🏗️ MOS → MDK Migration
 
@@ -37,6 +41,8 @@
 - ~~**Where does the backend code for these features live today?** Audit the current MOS codebase.~~
 - ~~**Where should it live in MDK?**~~
 
+
+
 ### ~~To-Do~~
 
 - ~~Discuss with Hemant and Arif — audit MOS sidebar features~~
@@ -44,6 +50,8 @@
 - ~~Create a feature-to-MDK mapping table (feature → package/plugin)~~
 - ~~Identify gaps: features MOS supports that MDK architecture doesn't yet cover~~
 - ~~Confirm the abstraction with Gio~~
+
+
 
 ### Follow-ups
 
@@ -58,22 +66,28 @@
 
 ---
 
+
+
 ## 📦 Documentation & Naming
 
 > Priority: **Medium**
 
+
+
 ### To-Do
 
-- ~~Clarify naming for each package — ensure 1:1 mapping between package names and architecture diagrams (see `mdk-libraries.md`)~~
-- **Rename `device-lib` → `lib`** (per Gio) — `device-lib` is misleading because the same package shape is used for non-device integrations (mempool.space, mining pools, other third-party services). Update `mdk-libraries.md` and any references in HLD docs accordingly.
+- ~~Clarify naming for each package — ensure 1:1 mapping between package names and architecture diagrams (see~~ `mdk-libraries.md`~~)~~
+- **Rename** `device-lib` **→** `lib` (per Gio) — `device-lib` is misleading because the same package shape is used for non-device integrations (mempool.space, mining pools, other third-party services). Update `mdk-libraries.md` and any references in HLD docs accordingly.
 - Workers in monorepo are built by us — explicitly mention this ownership boundary in the docs
   - Workers ship as reference implementations; external integrators build their own by subclassing `@tetherto/mdk-worker-base`
 - Improve + refine the architecture docs (HLD + supplementary)
-  - ~~`hld.md` — review for completeness after recent protocol simplification~~
-  - ~~`hld-mdk-app.md` — ensure frontend toolkit layering is accurate~~
-  - ~~`hld-agentic-framework.md` — restructure, simplify, add diagrams, examples, and demo recordings~~
-  - ~~`about.md` — resolve outstanding `{/* todo */}` comments (license link, UI kit naming, next steps links)~~
+  - `hld.md` ~~— review for completeness after recent protocol simplification~~
+  - `hld-mdk-app.md` ~~— ensure frontend toolkit layering is accurate~~
+  - `hld-agentic-framework.md` ~~— restructure, simplify, add diagrams, examples, and demo recordings~~
+  - `about.md` ~~— resolve outstanding~~ `{/* todo */}` ~~comments (license link, UI kit naming, next steps links)~~
 - ~~Update docs with Harrie — coordinate on public-facing documentation site alignment~~
+
+
 
 ### Key Question
 
@@ -81,6 +95,8 @@
 - ~~Talk to Parag and build MDK Coding Agent Skill from Parag's exising work (Robert may have some suggestion, not clear tho!) along with Harrie's doc~~
 
 ---
+
+
 
 ### ~~🔒 Repository Strategy~~
 
@@ -168,6 +184,7 @@ doc for cli
 4. create MVP for dev skills
 5. how to allow multiple transport ORK<>Worker / Multiple Language / Multiple Storage
 6. UI Docs catalog should be hosted and routed from doc
-7. ~~Share list of work you are doing so ana can create tasks~~
+7. have one npm workspace alias system which would work for fe and be both
+8. ~~Share list of work you are doing so ana can create tasks~~
 
 __
