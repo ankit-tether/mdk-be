@@ -25,7 +25,7 @@ Today, standing up and extending MDK means stitching together bespoke launchers 
 
 ### 1.3 Scope
 
-`mdk` covers the full **backend + operations** lifecycle. Explicitly **in scope**: onboarding, project bootstrap (including the optional UI dashboard — an MDK Next.js starter), backend scaffolding (Worker Plugins and Gateway Plugins), running and managing the stack, contract/plugin validation, Gateway capability discovery, multi-Gateway context management, and coding-agent enablement.
+`mdk` covers the full **backend + operations** lifecycle. Explicitly **in scope**: onboarding, project bootstrap (including the optional UI dashboard — the MDK Vite/React UI shell), backend scaffolding (Worker Plugins and Gateway Plugins), running and managing the stack, contract/plugin validation, Gateway capability discovery, multi-Gateway context management, and coding-agent enablement.
 
 ---
 
@@ -55,13 +55,13 @@ Today, standing up and extending MDK means stitching together bespoke launchers 
 Two tools shape `mdk`'s ergonomics: **kubectl** gives us a consistent, scriptable resource grammar; **OpenClaw**'s `[onboard wizard](https://docs.openclaw.ai/start/wizard)` gives us the guided setup model.
 
 
-| Source   | Idea                                                                                               | In `mdk`                                                                            |
-| -------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| kubectl  | `VERB NOUN` grammar; `-o json                                                                      | yaml                                                                                |
-| kubectl  | Declarative `apply -f`; kubeconfig contexts                                                        | `mdk apply -f mdk.yaml`; contexts select the active **Gateway** the CLI connects to |
-| OpenClaw | Guided **detect → verify (real check) → configure**; one guided flow with sane defaults pre-filled | `mdk onboard`                                                                       |
-| OpenClaw | Real state check; re-run is safe (verify, never silent wipe)                                       | `mdk status` checks env + all components; re-running `onboard` is idempotent        |
-| OpenClaw | Skills-install as an onboarding step                                                               | The MDK Developer Skill install part of `onboard`                                   |
+| Source   | Idea                                                                                               | In `mdk`                                                                                          |
+| -------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| kubectl  | `VERB NOUN` grammar; `-o json \| yaml`                                                             | `mdk create worker`, `mdk get workers`, `-o json \| yaml` on every read command                    |
+| kubectl  | Declarative `apply -f`; kubeconfig contexts                                                        | `mdk apply -f mdk.yaml` and `mdk context` are the design target (§3.2 Groups C/E) — not built yet  |
+| OpenClaw | Guided **detect → verify (real check) → configure**; one guided flow with sane defaults pre-filled | `mdk onboard`                                                                                      |
+| OpenClaw | Real state check; re-run is safe (verify, never silent wipe)                                       | `mdk status` checks env + all components; re-running `onboard` always confirms before overwriting  |
+| OpenClaw | Skills-install as an onboarding step                                                               | The MDK Developer Skill install part of `onboard`                                                  |
 
 
 ---
@@ -88,14 +88,16 @@ Every command inherits these:
 
 ### 3.2 Command groups
 
+Tables below mark implemented commands with ✅. Unmarked commands are either wired up as no-op **(stub)** — they exist, print a "not implemented" notice, and exit `0` — or, where noted, **not yet registered** at all (they do not appear in `--help` today).
+
 
 
 #### Group A — Onboarding & project lifecycle
 
 
-| Command       | Purpose                                                                                                                                                                                                                                        |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mdk onboard` | • The single guided wizard (§4) and the one entry point for setup. • Flow: detect, verify, configure, optional skill install, status check. • Writes `mdk.yaml` (§5.3) from the choices made, then prints the exact commands to run the stack. |
+| Command          | Purpose                                                                                                                                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `mdk onboard` ✅ | • The single guided wizard (§4) and the one entry point for setup. • Flow: detect, answer prompts, review, write `mdk.yaml`, install the chosen plugins/skill/dashboard, print the exact commands to run the stack (§4.2). |
 
 
 
@@ -103,11 +105,11 @@ Every command inherits these:
 #### Group B — Scaffold
 
 
-| Command                    | Purpose                                                                                                                                                                |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mdk create worker <name>` | • Scaffold a Worker Plugin package. • Emits an example `mdk-contract.json` with a `handler` per command/telemetry entry. • Includes matching per-action handler stubs. |
-| `mdk create plugin <name>` | • Scaffold a Gateway Plugin. • `mdk-plugin.json` manifest plus a plain-JS controller stub.                                                                             |
-| `mdk create dashboard`     | • Scaffold the MDK Next.js dashboard (the same starter `onboard` offers). • Wires it to the Gateway and seeds it from the bundled component registry (§5.5) that the `mdk-ui-component` skill builds from.                                    |
+| Command                       | Purpose                                                                                                                                                                                                                                                    |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mdk create worker <name>` ✅  | • Scaffold a Worker Plugin package from the bundled template into `workers/<name>`. • Ships an example `mdk-contract.json` with a `handler` per command/telemetry entry, matching handler stubs, and a mock device server. • Adds the worker to `mdk.yaml` under `spec.workers` (with a seed device) unless `--no-stack-entry`.                                                                                                       |
+| `mdk create plugin <name>` ✅  | • Scaffold a Gateway Plugin into `plugins/<name>`. • `mdk-plugin.json` manifest plus a plain-JS controller stub. • Adds it to `mdk.yaml` under `spec.gateway.plugins` unless `--no-stack-entry`.                                                                                                                                                    |
+| `mdk create dashboard [name]` ✅ | • Scaffold the MDK **Vite/React UI shell** (the same template `onboard`'s UI-dashboard step offers) into `apps/dashboard` (or `apps/<name>`). • Copied locally when run inside the MDK monorepo, otherwise fetched from GitHub. • Wires `VITE_GATEWAY_URL` to this stack's Gateway port. • The `mdk-ui-component` skill (not the CLI) carries the component registry it builds from (§5.5). |
 
 
 
@@ -117,13 +119,14 @@ Every command inherits these:
 
 | Command                          | Purpose                                                                                                                                                                                                                                                                                                                                                                                |
 | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mdk run [target]`               | • Start the stack from the spec (`mdk.yaml`, §5.3). •- **Single-process:** `mdk run` (alias `mdk run all`) boots the Kernel, Gateway, and every worker in one process. • - **Multi-process:** each component runs as its own process: `mdk run kernel`, `mdk run gateway`, and `mdk run worker <name>` per worker instance. • `mdk onboard` prints these exact commands at the end. |
-| `mdk get <resource>`             | • List live resources from the Kernel/Gateway: `workers` (instances), `devices` (registered deviceIds + owning instance), `plugins`, `contexts`. • Read-only; honors `-o`.                                                                                                                                                                                                             |
-| `mdk describe <resource> <name>` | • Detailed view including declared capabilities, `mdk-contract.json`, and registration state.                                                                                                                                                                                                                                                                                          |
-| `mdk logs <target>`              | • Stream logs for a service or worker. • Flags: `-f/--follow`, `--since`, `--tail <n>`.                                                                                                                                                                                                                                                                                                |
-| `mdk status`                     | • One-shot check of the current environment **and** every component. • Environment: Node 20+, package manager. • Stack: which layers (Kernel/Gateway/workers) are up, worker/device counts, per-component liveness/readiness (maps to the Kernel Health Monitor, `[hld.md](./hld.md)` §4.3.1), and aggregate health. • Read-only: reports, never repairs.                              |
-| `mdk apply -f <file>`            | • Declarative, idempotent reconcile from the spec (`mdk.yaml`, §5.3). • Diff desired vs running; restart only the worker instances whose config changed (§5.4).                                                                                                                                                                                                                        |
-| `mdk diff -f <file>`             | • Preview what `apply` would change (which instances restart because their config changed) without touching the running stack.                                                                                                                                                                                                                                                         |
+| `mdk run [target] [name]` ✅      | • Start the stack from the spec (`mdk.yaml`, §5.3). • No target (or `mdk run all`) boots the Kernel, Gateway, and every worker together in one process. • Any component can also be run on its own instead, one per terminal — `mdk run kernel`, `mdk run gateway`, `mdk run worker <name>`, `mdk run dashboard` — purely a choice of which command(s) you type; nothing in `mdk.yaml` picks one over the other. • `mdk onboard` prints the exact commands at the end (§4.2). |
+| `mdk eject`                      | • Materialize the spec (`mdk.yaml`) into a standalone, plain Node.js project (default `eject/`) that runs the stack with **no `mdk` CLI at runtime** — `node index.js` and you're up. • Safe to re-run: regenerates from the current `mdk.yaml` every time. • Flags: `--dir <path>`, `--out <path>` (default `eject/`), `--force`, `--no-install`. *(design target — not implemented yet, see §5.6)* |
+| `mdk get <resource>`             | • List live resources from the Kernel/Gateway: `workers` (instances), `devices` (registered deviceIds + owning instance), `plugins`, `contexts`. • Read-only; honors `-o`. *(stub)*                                                                                                                                                                                                    |
+| `mdk describe <resource> <name>` | • Detailed view including declared capabilities, `mdk-contract.json`, and registration state. *(stub)*                                                                                                                                                                                                                                                                                 |
+| `mdk logs <target>`              | • Stream logs for a service or worker. • Flags: `-f/--follow`, `--since`, `--tail <n>`. *(stub)*                                                                                                                                                                                                                                                                                        |
+| `mdk status` ✅                   | • One-shot check of the current environment **and** every component. • Environment: Node 20+, package manager, `mdk.yaml` validity, declared packages resolvable. • Stack: which layers (Kernel/Gateway/workers) are up, worker/device counts, per-component liveness/readiness (maps to the Kernel Health Monitor, `[hld.md](./hld.md)` §4.3.1), and aggregate health. • Read-only: reports, never repairs. |
+| `mdk apply -f <file>`            | • **Not yet implemented — no command registered.** Planned: declarative, idempotent reconcile from the spec (`mdk.yaml`, §5.3); diff desired vs running; restart only the worker instances whose config changed (§5.4). Today, an `mdk.yaml` edit means stopping and re-running `mdk run` by hand.                                                                                    |
+| `mdk diff -f <file>`             | • **Not yet implemented — no command registered.** Planned: preview what `apply` would change (which instances restart because their config changed) without touching the running stack.                                                                                                                                                                                              |
 
 
 
@@ -133,7 +136,7 @@ Every command inherits these:
 
 | Command        | Purpose                                                                                                                                                                                                                                        |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mdk discover` | • Query the Gateway MCP for live capabilities. • Write `site-profile.json` (schema per `[hld-mdk-developer-skill-v2.md](./hld-mdk-developer-skill-v2.md)` §5.1). • Flags: `--gateway <url>` (default `http://127.0.0.1:3847`), `--out <path>`. |
+| `mdk discover` | • Query the Gateway MCP for live capabilities. • Write `site-profile.json` (schema per `[hld-mdk-developer-skill-v2.md](./hld-mdk-developer-skill-v2.md)` §5.1). • Flags: `--gateway <url>` (default `http://127.0.0.1:3847`), `--out <path>`. *(stub — flags are wired, the query/write is not)* |
 
 
 
@@ -143,7 +146,7 @@ Every command inherits these:
 
 | Command       | Purpose                                                                                                                                                                                                                          |
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mdk context` | • The only way to point the CLI at a Gateway. • `set <name> --gateway <url>` to add or update an endpoint. • `use <name>` to switch; `list`; `current`; `remove <name>`. • Stored in CLI config (§5.2), analogous to kubeconfig. |
+| `mdk context` | • **Not yet implemented — no command registered.** Planned as the only way to point the CLI at a Gateway: `set <name> --gateway <url>` to add or update an endpoint; `use <name>` to switch; `list`; `current`; `remove <name>`; stored in CLI config (§5.2), analogous to kubeconfig. Today, commands that need a Gateway URL take it inline (e.g. `mdk discover --gateway <url>`). |
 
 
 
@@ -153,8 +156,8 @@ Every command inherits these:
 
 | Command            | Purpose                                                                                                                                                                                                                                        |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mdk skill add`    | • Install the MDK Developer Skill suite (wraps `npx skills add @tetherto/mdk-skill`). • Write/merge `AGENTS.md`. • Register the Gateway MCP with the detected coding-agent client. • Flags: `--client` (`cursor`, `claude`, `codex`, `cline`). |
-| `mdk mcp register` | • Register the Gateway MCP endpoint in the client config (`.cursor/mcp.json` / `.mcp.json`). • Does not touch skills.                                                                                                                          |
+| `mdk skill add` ✅  | • Install the MDK Developer Skill suite for the target coding-agent client, via `@tetherto/mdk-skill`'s programmatic API. • Flags: `--client` (`cursor`, `claude`, `all`), `--dir <path>`. • Writing/merging `AGENTS.md` and registering the Gateway MCP are not part of this yet — see `mdk mcp register` below. |
+| `mdk mcp register` | • Register the Gateway MCP endpoint in the client config (`.cursor/mcp.json` / `.mcp.json`). • Does not touch skills. *(stub)*                                                                                                                |
 
 
 
@@ -162,10 +165,10 @@ Every command inherits these:
 #### Group G — Meta & agent discovery
 
 
-| Command                              | Purpose                                                 |
-| ------------------------------------ | ------------------------------------------------------- |
-| `mdk manifest` (alias `--json-help`) | • Emit the machine-readable command manifest (§6.2).    |
-| `mdk version`                        | • Version, commit, and the MDK release line it targets. |
+| Command                             | Purpose                                                                            |
+| ------------------------------------ | ----------------------------------------------------------------------------------- |
+| `mdk manifest` (alias `mdk json-help`) | • Emit the machine-readable command manifest (§6.2). *(stub)*                    |
+| `mdk version` ✅                     | • Version, commit, and the MDK release line it targets.                            |
 
 
 
@@ -202,45 +205,57 @@ The single most important goal of `mdk` is that a developer who has never read a
 
 - **Minimal prior knowledge.** Every step explains itself in one line and picks a sensible default.
 - **Correct by construction.** Onboarding writes a valid `mdk.yaml` and hands you the exact commands to run the stack — no guesswork, no hidden state.
-- **Leave the developer agent-ready.** By the end, the coding agent in the repo is fluent in MDK (skill + `AGENTS.md` + MCP), so subsequent work is natural-language driven.
-- **Safe to re-run.** Re-running is a verify-and-repair pass, never a silent wipe.
+- **Leave the developer agent-ready.** By the end, the coding agent in the repo has the MDK Developer Skill installed, so subsequent work is natural-language driven. Writing/merging `AGENTS.md` and registering the Gateway MCP are the next layer on top (`mdk mcp register`, §3.2 Group F) and not part of `onboard` yet.
+- **Nothing happens without a final confirmation.** Every prompt before it only shapes an in-memory spec; canceling at any point, or declining the review step, leaves the project untouched.
 
 
 
 ### 4.2 The guided flow
 
+`mdk onboard` is one linear pass, top to bottom — there is no branching back to an earlier prompt. The only real decision points are the two opt-outs (UI dashboard, Developer Skill) and the final review/confirm gate.
+
 ```mermaid
 flowchart TD
-    A(["mdk onboard"]) --> B["Welcome and notice"]
-    B --> C["Detect environment"]
-    C --> D["Answer prompts: project, mode, ports, worker/gateway plugins, skill"]
-    D --> W["Write mdk.yaml"]
-    W --> G{"Install skill?"}
-    G -- yes --> H["skill add: skill + AGENTS.md + MCP"]
-    H --> U{"Add UI dashboard?"}
-    G -- skip --> U
-    U -- yes --> V["Scaffold Next.js starter (dashboard)"]
-    U -- skip --> P["Print commands to run the stack"]
-    V --> P
-    P --> K(["Done"])
+    A(["mdk onboard"]) --> B["Welcome banner + notice"]
+    B --> C["Detect: Node, package manager, git,\nexisting mdk.yaml, coding-agent client"]
+    C --> D["Prompt: project directory"]
+    D --> E["Prompt: stack name"]
+    E --> F["Prompt: worker plugins (multi-select)"]
+    F --> G["Prompt: gateway plugins (multi-select)"]
+    G --> H["Prompt: add UI dashboard? (default yes)"]
+    H --> I["Prompt: install Developer Skill? (default yes)"]
+    I -- yes --> J["Prompt: coding-agent client\n(cursor / claude / both)"]
+    I -- no --> K["Build spec + show review panel"]
+    J --> K
+    K --> L{"Write mdk.yaml\nwith these settings?"}
+    L -- no / cancel --> Z(["Exit — nothing written"])
+    L -- yes --> M["Write mdk.yaml + package.json\n(npm workspaces) + .gitignore"]
+    M --> N["Install selected worker/gateway\nplugin packages"]
+    N --> O{"Install Developer\nSkill? (from step I)"}
+    O -- yes --> P["mdk skill add: install skill files\nfor the chosen client"]
+    O -- no --> Q{"Add UI dashboard?\n(from step H)"}
+    P --> Q
+    Q -- yes --> R["Scaffold the UI shell into\napps/dashboard, wired to the Gateway"]
+    Q -- no --> S["Write README.md"]
+    R --> S
+    S --> T["Print next steps: run, manage,\nand (if scaffolded) dashboard commands"]
+    T --> K2(["Done"])
 ```
 
+Ports (Gateway `3847` / Kernel `3848` / workers `3850+`) are **not** a prompt — they are fixed defaults written straight into `mdk.yaml`, a one-line edit later if they ever collide with something. Every other step below maps 1:1 onto the diagram:
 
-
-1. **Welcome.** What will happen and where files are written; nothing destructive without confirmation.
-2. **Detect.** Node, package manager, git, any existing MDK workspace, the coding-agent client, and a running Kernel/Gateway.
-3. **Answer the prompts.** Each is pre-filled with a sensible default — press Enter to accept, or override inline:
-  - **Project** — scaffold a new project or attach to the current directory. *(default: current dir)*
-  - **Mode** — `single-process` or `multi-process`. *(default:* `single-process`*)*
-  - **Ports** — Gateway / Kernel / worker base port. *(defaults:* `3847` */* `3848` */* `3850+`*)*
-  - **Worker plugins** — multi-select from the available `@*/mdk-worker-`* packages; each pick is installed and added as a worker instance in `mdk.yaml`. *(default: none)*
-  - **Gateway plugins** — multi-select from the available `@*/mdk-plugin-`* packages; each pick is installed and added under `gateway.plugins`. *(default: none)*
-  - **Add the UI dashboard?** — scaffold the MDK Next.js starter project (the web dashboard) wired to the Gateway. *(default: yes; opt out to skip)*
-  - **Install the MDK Developer Skill?** *(default: yes)*
-   All answers are written to `mdk.yaml` (§5.3).
-4. **Install the skill (if chosen).** Run `mdk skill add` — installs the skill, writes/merges `AGENTS.md`, and registers the Gateway MCP.
-5. **Scaffold the UI dashboard (if chosen).** Create the MDK Next.js starter project (the web dashboard), pre-wired to the Gateway.
-6. **Print the commands.** Show the exact commands to start the stack — `mdk run` for single-process, or `mdk run kernel` / `mdk run gateway` / `mdk run worker <name>` for multi-process (per Group A / §3.2) — plus `mdk create worker` and the dashboard URL.
+1. **Welcome.** Show the MDK banner and a one-line notice of what will happen; nothing is written yet.
+2. **Detect the environment.** Node version (needs ≥ 20), package manager (npm/pnpm/yarn/bun, from the lockfile present), whether this is a git repo, whether `mdk.yaml` already exists here, and the coding-agent client already in the repo (`.cursor` / `.claude` / `.codex` / `.cline`, or none). Shown as an informational panel — nothing here is a running-Kernel/Gateway check.
+3. **Project.** Two prompts: *project directory* (default: current dir) and *stack name* (default: `my-stack`).
+4. **Plugins.** Two multi-selects, each pre-filled empty: *worker plugins* to install (from the CLI's built-in catalog — one real bundled worker today, the rest marked "not published yet") and *Gateway plugins* to install (same catalog pattern). Picking a worker that only ships inside the MDK source checkout gets a warning that it will 404 outside a monorepo checkout.
+5. **Developer experience.** *Add the UI dashboard?* (default: yes) and *Install the MDK Developer Skill?* (default: yes); choosing to install the skill adds one more prompt, *coding-agent client* (`cursor` / `claude` / both), pre-filled from the client detected in step 2 when it's `cursor` or `claude`.
+6. **Review.** A summary panel — stack name, ports, chosen workers/plugins, dashboard yes/no, Developer Skill yes/no + client, and the `mdk.yaml` path (flagged if it will be overwritten) — followed by one confirmation prompt (default: yes). Canceling, or answering no, exits immediately with **no files changed**.
+7. **Write the project files.** `mdk.yaml` (§5.3), a root `package.json` declaring `workers/*` and `plugins/*` as npm workspaces, and a `.gitignore` covering `.mdk/` runtime state and `node_modules/`.
+8. **Install plugin packages.** `npm install` the chosen registry packages (and `file:`-link any bundled worker) so they resolve from the project's `node_modules` before the stack ever runs. Best-effort — a failed install is a warning, not a hard stop, since the spec is already valid.
+9. **Install the skill (if chosen in step 5).** Run the same installer behind `mdk skill add` for the selected client. *(Today this installs the skill files only — see the Group F note in §3.2 for what's not wired up yet.)*
+10. **Scaffold the UI dashboard (if chosen in step 5).** Copy the MDK Vite/React UI shell into `apps/dashboard`, pointed at this stack's Gateway port via `VITE_GATEWAY_URL`.
+11. **Write `README.md`.** Documents the emitted project layout and the commands from step 12, written last since it needs to know whether a dashboard exists.
+12. **Print next steps.** The spec file to review, the command to start the stack (`mdk run`) plus the per-component alternative (`mdk run kernel` / `mdk run gateway` / `mdk run worker <name>`, per Group C / §3.2), `mdk status` and `mdk create worker` to keep managing the project, and — only if a dashboard was scaffolded — `cd` into it and `npm run dev`.
 
 ---
 
@@ -248,7 +263,7 @@ flowchart TD
 
 ### 5.1 Package & tech stack
 
-- **Package:** `@tetherto/mdk-cli`, living in the `mdk` monorepo (e.g. `packages/tooling/cli/`). The `mdk` command is exposed through the package.json `bin` field pointing at an entry script with a `#!/usr/bin/env node` 
+- **Package:** `@tetherto/mdk-cli`, living in the `mdk-prv` monorepo at `packages/cli/`. The `mdk` command is exposed through the package.json `bin` field (`{ "mdk": "dist/index.js" }`) pointing at a built entry script with a `#!/usr/bin/env node` shebang.
 - **Runtime:** Node.js (≥ 20), **TypeScript**, ESM.
 - **Framework:** 
   - **Commander.js** for the command tree, argument/flag parsing, and help; 
@@ -256,13 +271,15 @@ flowchart TD
 
 
 
-### 5.2 Configuration resolution
+### 5.2 Configuration resolution *(design target — not implemented yet)*
 
-Env (`MDK_*`) → global config (`~/.mdk/`) holds named Gateway contexts plus the active one (like kubeconfig), and stores **references** to secrets (e.g. `${MDK_GATEWAY_TOKEN}`), never plaintext. 
+Design intent: env (`MDK_*`) → global config (`~/.mdk/`) holds named Gateway contexts plus the active one (like kubeconfig), and stores **references** to secrets (e.g. `${MDK_GATEWAY_TOKEN}`), never plaintext.
+
+**Today**, the CLI has no global (`~/.mdk/`) config store and no `MDK_*` env resolution — this is the same gap as `mdk context` (§3.2 Group E) not being built yet. The only state on disk today is per-project: `.mdk/` under the project directory, written by `mdk run` (runtime state — Kernel/Gateway stores, worker databases, discovery keys; distinct from the global config described above).
 
 ### 5.3 Stack spec (`mdk.yaml`) — workers, instances & plugin config
 
-- The stack is described declaratively in one file (`mdk.yaml`). It captures the **logical** stack; `mode` selects how those components are wrapped in OS processes (single vs multi), without changing the spec's shape — so graduating from single to multi-process is a one-line change.  
+- The stack is described declaratively in one file (`mdk.yaml`), and it captures only the **logical** stack — components, ports, plugins, workers. How those components are wrapped in OS processes is not part of the spec at all: `mdk run` boots them together, `mdk run kernel` / `mdk run gateway` / `mdk run worker <name>` boot them apart, and switching between the two is just which command(s) you type, with no spec change.
 - Each Worker Plugin and each Gateway plugin carries a `config` block. The CLI treats `config` as **opaque and plugin-defined**: the *plugin developer* decides which keys it accepts and the CLI passes it through to the runtime unchanged. `config` holds only what the worker or plugin itself needs to operate — intervals, batch sizes, thresholds, log levels, feature flags — never device details like IPs or tokens. The keys below are just what these particular plugins happen to accept; another plugin might take a polling interval, a batch size, or nothing at all.
 
 ```yaml
@@ -271,7 +288,6 @@ kind: Stack
 metadata:
   name: my-stack
 spec:
-  mode: single-process
   kernel:
     port: 3848
   gateway:
@@ -297,11 +313,13 @@ spec:
         logLevel: warn
 ```
 
+> **Drift note:** each worker instance still carries a `port` field, seeded by `mdk onboard`/`mdk create worker` — but nothing in `mdk run` reads it today (a worker's actual listen port, when it has one, comes from its own `config`). It's vestigial from an earlier design and worth either wiring up or removing from the schema.
 
 
-### 5.4 Reconciliation — `apply` & restart-on-edit
 
-A worker's `config` is **fixed at the runtime's construction**. `mdk` still gives a kubectl-style live experience through **declarative reconciliation**:
+### 5.4 Reconciliation — `apply` & restart-on-edit *(design target — `mdk apply`/`mdk diff` are not implemented yet, §3.2 Group C)*
+
+A worker's `config` is **fixed at the runtime's construction**. Today, picking up a `mdk.yaml` edit means stopping and re-running `mdk run` by hand; the design intent below is what `mdk apply` closes the gap on once built — a kubectl-style live experience through **declarative reconciliation**:
 
 - `mdk apply -f mdk.yaml` diffs the desired spec against what's running and acts **only on what changed**, at worker-instance granularity.
 - **Every change is a config edit.** To change an instance's behavior, edit its `config` in `mdk.yaml` and run `mdk apply`. That one instance restarts — its channel to the Kernel drops briefly and re-registers,  keeping the blip small and the Kernel refreshing its registry (and the Gateway MCP) on re-registration.
@@ -310,13 +328,44 @@ A worker's `config` is **fixed at the runtime's construction**. `mdk` still give
 
 Blast radius is therefore always a single worker instance, never the whole stack, and the flow is identical whether a human edits `mdk.yaml` by hand or an agent runs `mdk apply`.
 
-### 5.5 Bundled UI component registry
+### 5.5 UI component registry
 
-Both `mdk onboard` (UI dashboard step) and `mdk create dashboard` scaffold the MDK Next.js starter. To make that dashboard buildable by a coding agent, the CLI ships a **component registry** — `registry.json`, generated from `@tetherto/mdk-react-devkit` — the machine-readable catalog of every available UI component (name, path, description, `tier`/`agent-ready`, category, props).
+Both `mdk onboard` (UI dashboard step) and `mdk create dashboard` scaffold the MDK Vite/React UI shell. To make that dashboard buildable by a coding agent, `@tetherto/mdk-react-devkit` publishes a **component registry** — `ui-registry.json`, the machine-readable catalog of every available UI component (name, path, description, `tier`/`agent-ready`, category, props).
 
-- **Location.** For now it lives in the CLI package folder (e.g. `cli/registry.json`); it may later be resolved from the devkit version a project pins.
-- **Who uses it.** The scaffolded dashboard and the `mdk-ui-component` skill read it to know which components exist and how to bind them — the skill selects from this catalog rather than inventing component names or props.
+- **Location.** It ships with the `mdk-ui-component` skill (`packages/mdk-skill/src/skills/mdk-ui-component/references/ui-registry.json`), not the CLI — the CLI itself has no registry file of its own.
+- **Who uses it.** The `mdk-ui-component` skill reads it to know which components exist and how to bind them into the scaffolded dashboard — the skill selects from this catalog rather than inventing component names or props.
 - **Versioning.** The registry carries its own `version` and `packageVersion`, so the dashboard and skill can pin to a known component set and it can be regenerated from the devkit.
+
+### 5.6 Eject — a portable, CLI-independent copy of the stack *(design target — `mdk eject` is not implemented yet)*
+
+**Why.** `mdk run` boots the stack by calling the Kernel/Worker/Gateway runtime APIs from inside the CLI — the boot logic itself is not something the developer owns or sees. `mdk eject` is the escape hatch: it renders that same boot logic out as plain source the developer now owns, for teams that want to deploy the stack (a CI image, a systemd unit, PM2, a Kubernetes `Deployment`, …) without depending on the `mdk` CLI at runtime. 
+
+> The idea is borrowed from `helm template` (render concrete artifacts from a declarative spec) and from Create React App's `eject` (materialize the tool's internals as code you now own).
+
+**What it generates.** Everything below is written into `<dir>/eject/` by default (`--out <path>` to change it):
+
+```
+eject/
+├── package.json        # name: <stack>-standalone; real deps, pinned to what's
+├── index.js            # boots Kernel + Gateway + every worker together
+│                        # (mirrors `mdk run` with no target)
+├── kernel.js            # boots the Kernel alone   (mirrors `mdk run kernel`)
+├── gateway.js           # boots the Gateway alone  (mirrors `mdk run gateway`)
+├── workers/
+│   └── <name>.js        # boots one worker instance alone
+│                         # (mirrors `mdk run worker <name>`)
+├── plugin/
+│   └── <name>/           # local worker or plugin packages that are not
+│                          # on npm, copied in
+└── README.md             # what this is, how it was generated, how to run it
+```
+
+- **`package.json`** lists real npm dependencies — `@tetherto/mdk-core`, `@tetherto/mdk-worker` (and `@tetherto/mdk-client` if referenced), one entry per selected worker package, one per gateway plugin — each pinned to the version actually installed in the project's `node_modules` at eject time, so the ejected project reproduces what was running, not just what `mdk.yaml` happens to allow.
+- **`index.js` / `kernel.js` / `gateway.js` / `workers/<name>.js`** call the same public runtime entry points `mdk run` uses internally (`getKernel`, `WorkerRuntime` / `loadPlugin`, `startGateway`) — just written out as literal source instead of hidden inside the CLI, so `node index.js` (or any one of the per-component scripts) needs nothing from `mdk` at runtime.
+
+**Regeneration.** `mdk eject` is idempotent and always reflects the *current* `mdk.yaml` — re-running it regenerates every generated file listed above from scratch. 
+
+**Once ejected**, the folder is on its own: it is not wired back into `mdk status` or `mdk run`, and further edits to `mdk.yaml` do not propagate to it automatically — re-running `mdk eject` is how you pull in the latest spec. 
 
 ---
 
@@ -337,17 +386,17 @@ The agentic-framework HLD (`[hld-agentic-framework.md](./hld-agentic-framework.m
 
 An LLM operating a live fleet uses **MCP**, not `mdk`. `mdk`'s job is to help *build* the system and to *wire up* that MCP endpoint..
 
-### 6.2 The command manifest
+### 6.2 The command manifest *(not implemented yet — `mdk manifest` is a stub, §3.2 Group G)*
 
-`mdk manifest` (and the `--json-help` alias) walks the Commander program and emits a versioned JSON description of every command: name, description, usage, aliases, arguments (required/variadic), options (flags, defaults, whether they take a value), and nested subcommands. 
+`mdk manifest` (and the `mdk json-help` alias) is meant to walk the Commander program and emit a versioned JSON description of every command: name, description, usage, aliases, arguments (required/variadic), options (flags, defaults, whether they take a value), and nested subcommands.
 
-Agents read this once to discover the entire surface without spawning `--help` per command or scraping text. The manifest carries its own `version` so agents can pin to a known shape.
+Agents will read this once to discover the entire surface without spawning `--help` per command or scraping text. The manifest will carry its own `version` so agents can pin to a known shape.
 
 ### 6.3 Relationship to the Developer Skill
 
 `mdk` and the Developer Skill suite are complementary:
 
-- `mdk onboard` **installs** the skill and wires the MCP.
+- `mdk onboard` **installs** the skill (`mdk skill add`). Writing/merging `AGENTS.md` and wiring the Gateway MCP are designed as the next layer (`mdk mcp register`) but are not implemented yet — see the Group F note in §3.2.
 - The skill then **teaches the agent to call** `mdk` — e.g. run `mdk discover` before designing an aggregation, `mdk create worker` to start a package.
 
 ---
@@ -356,8 +405,8 @@ Agents read this once to discover the entire surface without spawning `--help` p
 
 - **Install:** zero-install via `npx @tetherto/mdk-cli …`, or `npm i -g @tetherto/mdk-cli` for the `mdk` cli. The `mdk onboard` path is the recommended first touch.
 - **Versioning:** `mdk` is versioned to track the MDK release line. `mdk version` prints both the CLI version.
-- **Update nudge:** `mdk` may print (never block on) a notice when a newer version targeting the same MDK line is available.
-- **Analytics:** is integrated in the CLI to understand the user behaviour and journey, to improve the system.
+- **Update nudge:** `mdk` may print (never block on) a notice when a newer version targeting the same MDK line is available. *(Not implemented yet.)*
+- **Analytics:** the intent is to instrument the CLI to understand user behavior and journey, to improve the system. *(Not implemented yet — no analytics code exists in the CLI today.)*
 
 ---
 
