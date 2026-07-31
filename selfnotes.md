@@ -185,6 +185,7 @@ doc for cli
 5. how to allow multiple transport ORK<>Worker / Multiple Language / Multiple Storage
 6. UI Docs catalog should be hosted and routed from doc
 7. have one npm workspace alias system which would work for fe and be both
-8. ~~Share list of work you are doing so ana can create tasks~~
+8. add types to jS libs
+9. ~~Share list of work you are doing so ana can create tasks~~
 
 __
