@@ -55,3 +55,21 @@ What all pages we will have (**We need more Product input here!**)
 > - **Achievable now.** The three Workers already exist.
 > - **Sets the pattern.** Every App after this one gets cheaper.
 
+
+
+
+
+## Ways of Working to Achieve this: **Product-led Engineering**.
+
+I can define the technical architecture and build the App, but I don’t want to make assumptions about what the mining industry actually needs.
+
+What I need from the Product team is to define the **exact capabilities and workflows that solve real problems for mining operators** — what they need to monitor, what actions they need to perform, and what information is actually valuable to them.
+
+For example, I can provide the technical foundation for Antminer, WhatsMiner, and Avalon integrations, a unified Gateway API, and the UI framework. But someone with deep mining domain expertise should tell us **what the product should actually show and what it should allow users to do**.
+
+So the vision is:
+
+**Product defines the real industry problem and required experience → Engineering builds the reusable technical solution → We package it as an MDK App.**
+
+This ensures we’re not building technically impressive components that don’t solve a meaningful customer problem.
+
