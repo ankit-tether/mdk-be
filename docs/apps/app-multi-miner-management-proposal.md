@@ -55,7 +55,7 @@ What all pages we will have (**We need more Product input here!**)
 > - **Achievable now.** The three Workers already exist.
 > - **Sets the pattern.** Every App after this one gets cheaper.
 
-
+---
 
 
 
@@ -72,4 +72,3 @@ So the vision is:
 **Product defines the real industry problem and required experience → Engineering builds the reusable technical solution → We package it as an MDK App.**
 
 This ensures we’re not building technically impressive components that don’t solve a meaningful customer problem.
-
