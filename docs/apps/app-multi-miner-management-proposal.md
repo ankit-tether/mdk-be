@@ -40,10 +40,16 @@ The industry response so far has been closed, proprietary platforms that solve t
 
 - **UI Pages** — integrated with the APIs from the Multi-Miner Gateway Plugin to visualize all the data, and to provide the user interface for monitoring and managing all three types of miner.
 
+What all pages we will have (**We need more Product input here!**)
+
+- List of all Miners with general stats 
+- Drop down to trigger actions like Reboot, Set Miner Pool, etc
+- Dashboard to show combined stats of all miners like aggregates hash, total power consumption, etc
 
 
-####  Why this App, first
-> 
+
+#### Why this App, first
+
 > - **Widest pain.** Mixed fleets are the norm, not a niche.
 > - **Proves the architecture** — Workers, Gateway, UI, contracts, and AI, all exercised at once on real hardware.
 > - **Achievable now.** The three Workers already exist.
