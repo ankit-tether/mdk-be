@@ -93,7 +93,7 @@ hosting N same-type devices behind a single HRPC channel to the Kernel.
 1. **An interval collector.** On its own cadence the runtime walks `this._devices` and calls the
   plugin's telemetry handlers.
 2. **A write to the store.** Each result is persisted as `{ data, ts }` keyed by device, so the
-  latest value survives a restart and is readable without touching hardware.
+  latest values survives a restart and is readable without touching hardware. Time series of the data is stored with the timestamp.
 3. **A read served from the store** instead of calling `devices`. A fleet read then costs **zero device round-trips**.
 
 **Cons:**
@@ -113,7 +113,31 @@ last good reading.
 
 
 
-## 6. Aggregation belongs to the Gateway plugin
+## 6. Design considerations
+
+### Worker Failure
+
+Replicating data at the worker level could introduce some potential anti-patterns:
+
+* Requests would always need to go through the kernel to access device data.
+* A large amount of data would be replicated for a scenario that may occur only occasionally.
+* The gateway would become stateful, while the kernel and worker already maintain state.
+
+We can revisit this approach later if worker downtime becomes a frequent or significant issue.
+
+### Demand Signal
+
+Per-worker frequency configuration is already how deployments tune this. mdk.yaml sets `telemetryPollIntervalMs` at the worker level and overrides the default set by the worker author.
+
+The floor serves a dual purpose: it acts as both the minimum polling interval and the anti-abuse guard.
+
+Making frequency a parameter of the read means the Worker Runtime will only return data captured in the requested frequency window. The worker itself continues to poll at its configured baseline and always polls at that interval.
+
+---
+
+
+
+## 7. Aggregation belongs to the Gateway plugin
 
 **The runtime stores raw per-device metrics, the Kernel moves them unchanged, and every sum,
 average, ratio and efficiency figure is computed in the Gateway plugin.**
@@ -137,11 +161,15 @@ flowchart LR
 device selections and freshness windows over the same metrics. Fixing the formula below the plugin  
 forces one definition on everyone, and gives the Kernel opinions about what "site hashrate" means.
 
+
+
+
+
 ---
 
 
 
-## 7. The call path and its names
+## 8. The call path and its names
 
 **How a plugin calls it**, controllers stay `async function (req)`(*potentially*):
 
