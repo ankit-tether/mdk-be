@@ -125,45 +125,94 @@ Replicating data at the worker level could introduce some potential anti-pattern
 
 We can revisit this approach later if worker downtime becomes a frequent or significant issue.
 
-### Demand Signal
-
-Per-worker frequency configuration is already how deployments tune this. mdk.yaml sets `telemetryPollIntervalMs` at the worker level and overrides the default set by the worker author.
-
-The floor serves a dual purpose: it acts as both the minimum polling interval and the anti-abuse guard.
+### Polling interval
 
 Making frequency a parameter of the read means the Worker Runtime will only return data captured in the requested frequency window. The worker itself continues to poll at its configured baseline and always polls at that interval.
+
+**The default belongs to the vendor.** The worker author sets `telemetryPollIntervalMs` in the
+package's own `mdk-contract.json`, because they are the only party who knows what the device tolerates — the
+antminer package ships `60000` today. An operator who wants a different rate overrides it per worker
+instance in `mdk.yaml`, under `spec.workers[].config`, which is already the opaque per-worker block
+the CLI hands to the worker at boot:
+
+```yaml
+spec:
+  workers:
+    - name: antminer-a
+      package: "@tetherto/mdk-worker-antminer"
+      port: 4100
+      config:
+        telemetryPollIntervalMs: 10000    # vendor default is 60000
+```
+
+The override is per instance, so two workers of the same package on one site can poll at different
+rates.
 
 ---
 
 
 
-## 7. Aggregation belongs to the Gateway plugin
+## 7. Aggregation
 
-**The runtime stores raw per-device metrics, the Kernel moves them unchanged, and every sum,
-average, ratio and efficiency figure is computed in the Gateway plugin.**
+**The runtime stores raw per-device metrics. A plugin either asks the runtime to aggregate them
+(§7.1) or requests the raw time series; the Kernel routes and merges either way, and computes
+nothing itself.**
 
 ```mermaid
 flowchart LR
-  D["Devices"] -->|"raw metrics"| WR["WorkerRuntime<br/>stores raw"]
-  WR -->|"raw, per device"| K["Kernel<br/>routes, does not compute"]
-  K -->|"raw, per device"| P["Gateway plugin<br/>sum / avg / ratio"]
+  D["Devices"] -->|"raw metrics"| WR["WorkerRuntime<br/>stores raw · aggregates on request"]
+  WR -->|"raw series or aggregated result"| K["Kernel<br/>routes and merges, never computes"]
+  K --> P["Gateway plugin"]
   P --> A["App"]
 
-  style P fill:#fff3e0,stroke:#ff9800,color:#000
+  style WR fill:#fff3e0,stroke:#ff9800,color:#000
 ```
 
 
 
-**Why not in WorkerRuntime:**
+### 7.1 Aggregating on the WorkerRuntime
 
-- **Partial aggregation is arithmetically wrong.** A worker sees only its own devices. Sums survive being added up per worker; averages, percentiles and ratios do not. Aggregating at the worker silently produces wrong numbers for everything but sums.
-- **Aggregation is app semantics.** A dashboard and a monthly report may legitimately use different  
-device selections and freshness windows over the same metrics. Fixing the formula below the plugin  
-forces one definition on everyone, and gives the Kernel opinions about what "site hashrate" means.
+A plugin that does not need per-device values can hand the runtime an aggregation spec and get back a
+single result instead of N device readings. The op set and spec shape are the same as `moria-lib-stats`:
 
+| | Ops |
+|---|---|
+| Scalar | `sum`, `avg`, `cnt` |
+| Grouped | `group`, `group_sum`, `group_avg`, `group_max`, `group_cnt`, `group_multiple_stats` |
+| Structural | `arr_concat`, `obj_concat`, `nested_obj_concat`, `array_obj_calc` |
 
+There is no `min`, `percentile`, `median`, etc — those do not exist in the
+library today and would have to be added later on.
 
+**Which ops apply is decided by the metric's declared type.** `mdk-contract.json` types every metric
+as `number`, `string` or `boolean`, and the runtime only accepts ops that type can support:
 
+| Declared type | Ops available |
+|---|---|
+| `number` | everything above — `sum`, `avg`, `group_sum`, `group_avg`, `group_max` and the rest |
+| `string` | counting and last-value only: `cnt`, `group_cnt`, `group`. There is no sum of a firmware version |
+| `boolean` | same as `string` — `cnt`, `group_cnt`, `group`, counted by filtering on the value |
+
+Asking for `avg` on a `string` metric is a spec error, rejected when the op spec is validated rather
+than returning a silently wrong number at read time.
+
+**How a plugin calls it:**
+
+```js
+const { workers } = await mdkClient.listWorkers({ type: 'miner' })
+
+const agg = await mdkClient.pullAggregate({
+  workers: workers.map(w => w.workerId),
+  ops: {
+    hashrate_total: { op: 'sum',       src: 'metrics.hashrate_rt' },
+    hashrate_avg:   { op: 'avg',       src: 'metrics.hashrate_rt' },
+    online_cnt:     { op: 'cnt',       filter: { src: 'metrics.status', eq: 'mining' } },
+    by_container:   { op: 'group_sum', src: 'metrics.hashrate_rt', group: 'info.container' }
+  }
+})
+
+return { hashrate: agg.ops.hashrate_total, avgPerMiner: agg.ops.hashrate_avg, byContainer: agg.ops.by_container }
+```
 
 ---
 
@@ -186,19 +235,18 @@ const vals = Object.values(snap.devices).map(d => d.metrics.hashrate_rt?.value).
 return { hashrate: vals.reduce((a, b) => a + b, 0), reporting: vals.length, snapshotTs: snap.snapshotTs }
 ```
 
-**Response** — per-device values keyed by metric, plus which workers answered:
+**Reading at a coarser granularity.** The runtime polls on its configured interval, but a plugin
+rarely wants every point it holds. `granularity` downsamples the stored series on the way out — one
+point per bucket instead of everything:
 
 ```js
-{
-  snapshotTs: 1789500000000,
-  devices: {
-    'AM-001': { workerId: 'antminer-1', metrics: { hashrate_rt: { value: 94.2, ts: 1789499997000 } } }
-  },
-  workers: {
-    'antminer-1': { ok: true,  ts: 1789499997000 },
-    'av-2':       { ok: false, error: 'ERR_TIMEOUT' }   // its devices are absent, not zero
-  }
-}
+// Worker polls every 5s. A chart wants one point per minute over the last hour.
+const series = await mdkClient.pullSnapshot({
+  workers: workers.map(w => w.workerId),
+  metrics: ['hashrate_rt'],
+  granularity: '1m',
+  from: Date.now() - 3600_000
+})
 ```
 
 ---
