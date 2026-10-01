@@ -115,13 +115,15 @@ last good reading.
 
 ## 6. Design considerations
 
+
+
 ### Worker Failure
 
 Replicating data at the worker level could introduce some potential anti-patterns:
 
-* Requests would always need to go through the kernel to access device data.
-* A large amount of data would be replicated for a scenario that may occur only occasionally.
-* The gateway would become stateful, while the kernel and worker already maintain state.
+- Requests would always need to go through the kernel to access device data.
+- A large amount of data would be replicated for a scenario that may occur only occasionally.
+- The gateway would become stateful, while the kernel and worker already maintain state.
 
 We can revisit this approach later if worker downtime becomes a frequent or significant issue.
 
@@ -148,6 +150,24 @@ spec:
 The override is per instance, so two workers of the same package on one site can poll at different
 rates.
 
+### Metrics and handlers
+
+**One handler may serve several metrics**, because one device call usually returns several values at
+once. The handler returns whatever the device gave it, and each metric declares where inside that
+response its own value sits.
+
+If a handler returns `{ power: 20, minerData: { hashrate: 20 } }`, the contract carries a path per
+metric:
+
+```json
+"telemetry": [
+  { "name": "power",       "type": "number", "unit": "W",    "handler": "minerStats", "path": "power" },
+  { "name": "hashrate_rt", "type": "number", "unit": "TH/s", "handler": "minerStats", "path": "minerData.hashrate" }
+]
+```
+
+The runtime calls each distinct handler once per sweep and extracts one value per metric from the result.
+
 ---
 
 
@@ -170,16 +190,20 @@ flowchart LR
 
 
 
+
+
 ### 7.1 Aggregating on the WorkerRuntime
 
 A plugin that does not need per-device values can hand the runtime an aggregation spec and get back a
 single result instead of N device readings. The op set and spec shape are the same as `moria-lib-stats`:
 
-| | Ops |
-|---|---|
-| Scalar | `sum`, `avg`, `cnt` |
-| Grouped | `group`, `group_sum`, `group_avg`, `group_max`, `group_cnt`, `group_multiple_stats` |
-| Structural | `arr_concat`, `obj_concat`, `nested_obj_concat`, `array_obj_calc` |
+
+|            | Ops                                                                                 |
+| ---------- | ----------------------------------------------------------------------------------- |
+| Scalar     | `sum`, `avg`, `cnt`                                                                 |
+| Grouped    | `group`, `group_sum`, `group_avg`, `group_max`, `group_cnt`, `group_multiple_stats` |
+| Structural | `arr_concat`, `obj_concat`, `nested_obj_concat`, `array_obj_calc`                   |
+
 
 There is no `min`, `percentile`, `median`, etc — those do not exist in the
 library today and would have to be added later on.
@@ -187,11 +211,13 @@ library today and would have to be added later on.
 **Which ops apply is decided by the metric's declared type.** `mdk-contract.json` types every metric
 as `number`, `string` or `boolean`, and the runtime only accepts ops that type can support:
 
-| Declared type | Ops available |
-|---|---|
-| `number` | everything above — `sum`, `avg`, `group_sum`, `group_avg`, `group_max` and the rest |
-| `string` | counting and last-value only: `cnt`, `group_cnt`, `group`. There is no sum of a firmware version |
-| `boolean` | same as `string` — `cnt`, `group_cnt`, `group`, counted by filtering on the value |
+
+| Declared type | Ops available                                                                                    |
+| ------------- | ------------------------------------------------------------------------------------------------ |
+| `number`      | everything above — `sum`, `avg`, `group_sum`, `group_avg`, `group_max` and the rest              |
+| `string`      | counting and last-value only: `cnt`, `group_cnt`, `group`. There is no sum of a firmware version |
+| `boolean`     | same as `string` — `cnt`, `group_cnt`, `group`, counted by filtering on the value                |
+
 
 Asking for `avg` on a `string` metric is a spec error, rejected when the op spec is validated rather
 than returning a silently wrong number at read time.
@@ -249,5 +275,19 @@ const series = await mdkClient.pullSnapshot({
 })
 ```
 
----
+**Different apps can ask for different granularities, and each is answered from the same stored
+series.** The runtime stores at one resolution — whatever it polled at — and a read asks for sample
+points at its own interval. Where a requested point has no exact reading, the runtime returns the
+nearest one it holds.
 
+A worker storing every 5s, serving a request for 7s:
+
+| Requested sample | Returned reading | Why |
+|---|---|---|
+| 0s | 0s | exact |
+| 7s | **5s** | nearer than 10s |
+| 14s | **15s** | nearer than 10s |
+| 21s | 20s | nearer than 25s |
+
+
+---
