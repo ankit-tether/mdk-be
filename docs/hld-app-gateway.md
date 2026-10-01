@@ -83,18 +83,22 @@ code.
 
 ## 3. Option B — one Gateway, per-app runtime processes
 
-One shared Gateway owns authentication, RBAC and routing and executes no app code. Each app runs as a simple supervised runtime process with its own credential. The Gateway forwards authorized requests to each runtime over **HRPC, which is secure by default**: every stream is encrypted, and both ends are authenticated by their key pairs.
+One shared Gateway owns authentication, RBAC and routing and executes no app code. Each app runs as a simple supervised runtime process with its own credential. The Gateway forwards authorized requests to each runtime over **HRPC, which is secure by default**: every stream is encrypted, and both ends are authenticated by their key pairs. The MCP server does the same for agents: it authorizes each tool call and forwards it to the app's runtime over HRPC, exactly like the Gateway.
 
 ```mermaid
 flowchart TD
-  U["CLI / UI / AI agent"] --> G["Shared Gateway :3847<br/>authn · RBAC · routing · cache"]
+  U["CLI / UI"] --> G["Shared Gateway :3847<br/>authn · RBAC · routing · cache"]
+  AG["AI agent"] --> M["MCP server<br/>authn · RBAC · tool routing"]
   G -->|"HRPC<br/>+ verified user identity"| RA["Runtime A<br/>(Operation Center)"]
   G -->|"same"| RB["Runtime B<br/>(Sentinel)"]
+  M -->|"HRPC<br/>+ verified agent identity"| RA
+  M -->|"same"| RB
   RA -->|"installation A creds"| K["Shared Kernel"]
   RB -->|"installation B creds"| K
   K --> W["Registered workers"]
 
   style G fill:#fff3e0,stroke:#ff9800,color:#000
+  style M fill:#fff3e0,stroke:#ff9800,color:#000
   style K fill:#e8f5e9,stroke:#4caf50,color:#000
 ```
 
@@ -105,19 +109,19 @@ Three rules make it sound; without them it is today's situation with extra steps
 1. **The runtime holds its own Kernel credential and connects to the Kernel directly.**
 2. **The forwarding channel is authenticated both ways.** HRPC gives this by default: each end
   proves its key pair, so the runtime can verify *which* peer asserted a forwarded identity.
-3. **The runtime refuses anything not from the Gateway.** It accepts HRPC calls only from the
-  Gateway's key.
+3. **The runtime refuses anything not from the Gateway or the MCP server.** It accepts HRPC calls
+  only from their two keys.
 
 **Pros**
 
 - **One enforcement point** — the Gateway is both the single host and the authorization boundary;
 auth, TLS, CORS and rate limits live in one place, on one version.
-- **One MCP endpoint** — tools are namespaced by App ID and take the same authn → RBAC path as
-HTTP; an agent configures one server.
-- **Isolation kept** — each runtime has its own process and Kernel credential; the Gateway runs no
-app code.
+- **One MCP endpoint** — tools are namespaced by App ID, take the same authn → RBAC path as HTTP,
+and reach the app's runtime over HRPC just like Gateway requests; an agent configures one server.
+- **Isolation kept** — each runtime has its own process and Kernel credential; neither the Gateway
+nor the MCP server runs app code.
 - **Central access logs** — the Gateway logs every request at the ingress, giving one source of user telemetry.
-- **Secure channel by default** — Gateway-to-runtime traffic runs over HRPC, so encryption and mutual authentication come built in.
+- **Secure channel by default** — Gateway-to-runtime and MCP-to-runtime traffic run over HRPC, so encryption and mutual authentication come built in.
 - **App logic survives a Gateway outage** — each runtime keeps its own Kernel connection, so
 background work continues while the front door is down.
 - **Easy to scale horizontally** — the Gateway is mostly stateless, so it scales out by adding more instances as traffic grows.
@@ -132,7 +136,7 @@ already comes from the manifest rather than from code.
 > **Note — auth for users, apps and agents**
 >
 > - RBAC auth for users and apps is a library that plugs into the Gateway's Fastify router.
-> - Each app gets one **service account**, and its identity token is issued to that account.
+> - Each app gets one **service account**, created at install with the permissions the app requests in `mdk-app.yaml`, and its identity token is issued to that account.
 > - Incoming credentials (mostly JWTs) are verified at the shared Gateway for users, and at the Kernel for app service accounts.
 > - Agents calling the MCP server go through the same library and mechanism.
 > - How this works internally is covered in a separate HLD (§5).
@@ -148,7 +152,7 @@ already comes from the manifest rather than from code.
 - **Auth is enforced once** — authentication, RBAC, TLS, CORS and rate limits live in the shared Gateway, not in every app's Gateway.
 - **Agents get one MCP endpoint** — one server and one tool set, checked by the same RBAC as HTTP.
 - **Simpler for users** — one host with no nginx to set up, and one place to see every app and its access logs.
-- **Isolation is kept** — each app runs in its own process with its own Kernel credential, and the Gateway reaches it over HRPC, which is secure by default.
+- **Isolation is kept** — each app runs in its own process with its own Kernel credential, and the Gateway and the MCP server reach it over HRPC, which is secure by default.
 - **Resilient and scalable** — app logic keeps running if the Gateway goes down, and the mostly stateless Gateway scales horizontally.
 
 The trade-offs we accept: the Gateway is a shared ingress point, and the app runtime is one more library for the MDK team to maintain.

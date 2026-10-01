@@ -19,7 +19,7 @@ So this design owes a check at every way in: the Gateway for users, the MCP serv
 1. `mdk.yaml` **is the only place policy is authored.** One declarative file, version-controlled, loaded into Hyperbee at boot.
 2. **There is no superadmin.** No bypass claim, no break-glass identity. Full access is an ordinary role holding wildcards, and it only exists if `mdk.yaml` binds it.
 3. **Operators never edit** `mdk-plugin.json` **or** `mdk-contract.json`**.** Those ship inside a package and belong to its author. The operator's entire lever is `spec.rbac` in `mdk.yaml`.
-4. **Plugins take no part in authorization.** A package declares no permissions, requests none, and grants none. Installing it makes its routes governable; the vocabulary is derived by the Gateway and the Kernel.
+4. **A package never decides who may call it.** Installing it makes its routes governable, with the vocabulary derived by the Gateway and the Kernel; who may call them is set only in `spec.rbac`. The one thing an app package states is the Kernel access its own service account needs, as `permissions` in `mdk-app.yaml`; install grants exactly that, as a role and binding it writes to `spec.rbac` ([hld-app-packaging.md §7.2](./hld-app-packaging.md)).
 5. **Fail closed.** No matching rule means denied. Absence of policy is denial, never allowance.
 
 ---
@@ -29,7 +29,7 @@ So this design owes a check at every way in: the Gateway for users, the MCP serv
 Users, AI agents and apps come in by different paths, and each is checked where it enters:
 
 - **Users**, in the UI, send their requests to the Gateway. Each request is checked as it enters the Gateway.
-- **AI agents** send their tool calls to the MCP server, which works like the Gateway: each call is checked as it enters the MCP server, then routed to the app the tool belongs to. An agent authenticates with its own service account.
+- **AI agents** send their tool calls to the MCP server, which works like the Gateway: each call is checked as it enters the MCP server, then forwarded over HRPC to the runtime of the app the tool belongs to, just as the Gateway forwards a request. An agent authenticates with its own service account.
 - **Apps** each run in their own runtime and call the Kernel directly, with their own service account. Each call is checked as it enters the Kernel.
 
 All three checks evaluate the same `spec.rbac` from `mdk.yaml`, and every caller authenticates with a JWT (§5).
@@ -38,8 +38,8 @@ All three checks evaluate the same `spec.rbac` from `mdk.yaml`, and every caller
 flowchart TD
   U["User<br/>UI"] -->|"user JWT"| GW["Gateway<br/>checks users"]
   AG["AI agent"] -->|"service-account JWT"| MS["MCP server<br/>checks agents"]
-  GW --> AR["App runtimes<br/>one service account each"]
-  MS --> AR
+  GW -->|"HRPC + user identity"| AR["App runtimes<br/>one service account each"]
+  MS -->|"HRPC + agent identity"| AR
   AR -->|"service-account JWT"| K["Kernel<br/>checks apps"]
   K --> W["Workers"]
 
@@ -105,20 +105,20 @@ spec:
             verbs: [create]
             resourceNames: ["rack-3-*"]
 
-      # devices, checked at the Kernel
-      - name: all-miners-rw             # every miner: antminer-a, antminer-b, avalon-a
+      # devices, checked at the Kernel; each app's role is written by install from its mdk-app.yaml permissions
+      - name: app-ops-center            # every miner: antminer-a, antminer-b, avalon-a
         rules:
           - resources: [devices]
             verbs: [read, write]
             resourceNames: ["miner/*"]
 
-      - name: all-antminers-rw          # antminer-a and antminer-b, not avalon-a
+      - name: app-antminer-tuner        # antminer-a and antminer-b, not avalon-a
         rules:
           - resources: [devices]
             verbs: [read, write]
             resourceNames: ["miner/antminer/*"]
 
-      - name: antminer-a-rw             # antminer-a only; antminer-b gets nothing
+      - name: app-sentinel              # requested miner/*; the operator narrowed it to antminer-a only
         rules:
           - resources: [devices]
             verbs: [read, write]
@@ -136,11 +136,11 @@ spec:
         subjects: [{ kind: User, name: ops-team@example.com }]
       - role: fleet-operator            # an AI agent, checked at the MCP server
         subjects: [{ kind: ServiceAccount, name: operator-agent }]
-      - role: all-miners-rw
+      - role: app-ops-center            # app bindings are written by install
         subjects: [{ kind: ServiceAccount, name: app:ops-center }]
-      - role: all-antminers-rw
+      - role: app-antminer-tuner
         subjects: [{ kind: ServiceAccount, name: app:antminer-tuner }]
-      - role: antminer-a-rw
+      - role: app-sentinel
         subjects: [{ kind: ServiceAccount, name: app:sentinel }]
 ```
 
@@ -148,7 +148,7 @@ spec:
 | Field                   | Meaning                                                                                                                                                                                                                                                                                                |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `enforcement`           | `deny` — an unmatched request is refused (`403` at the Gateway)                                                                                                                                                                                                                                        |
-| `apps[].serviceAccount` | The service account the app's runtime authenticates as, `app:<name>`. Written by install; a binding grants it Kernel access.                                                                                                                                                                           |
+| `apps[].serviceAccount` | The service account the app's runtime authenticates as, `app:<name>`. Written by install, with the role and binding that grant its requested access.                                                                                                                                                   |
 | `roles[].rules`         | Rules, each with `resources`, `verbs` and optional `resourceNames` (instance scoping, wildcards allowed). An app route's resource starts with its plugin's or app's name; at the Kernel the resource is `devices`, each named `family/brand/worker/device`, as in `miner/antminer/antminer-a/AM-001`. |
 | `bindings[].subjects`   | `User` (JWT `sub`/email), `Group` (JWT `groups`/OAuth org), `ServiceAccount` (an app's `app:<name>`, or an AI agent such as the Operator Agent).                                                                                                                                                       |
 

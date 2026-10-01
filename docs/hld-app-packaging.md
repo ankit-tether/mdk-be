@@ -31,8 +31,9 @@ CLI commands that build and install it.
 3. **Build once, install anywhere.** The package is identical on every instance. Everything
   specific to one instance (installation ID, keys, credentials, config values, installed name) is
   created at install time and never ships with the app.
-4. **Requests are not grants.** An app states the Kernel access it needs; only the operator can
-  grant it.
+4. **Install grants what the app requests, and nothing more.** An app states the Kernel access it
+  needs in `mdk-app.yaml`; install creates the app's service account and grants it exactly that.
+  The operator can narrow the grant afterwards in `mdk.yaml`.
 5. **A trusted source proves where an app came from, not that it is safe.**
 6. **Plugins move over unchanged.** An existing Gateway plugin becomes an app's backend without
   source changes.
@@ -141,18 +142,18 @@ riskier, and some companies will not allow it.
 id: io.tether.sentinel                 # immutable identity, reverse DNS
 version: 0.2.0                         # semver, equal to package.json
 displayName: Sentinel
-permissions:                           # requests, shown at install, never grants
-  - apiGroups: [kernel]
-    resources: [devices, telemetry]
-    verbs: [get, list, watch]
+permissions:                           # granted to the app's service account at install
+  - resources: [devices]
+    verbs: [read, write]
+    resourceNames: ["miner/*"]         # every miner; devices are named family/brand/worker/device
 ```
 
 - `id` — the app's permanent, unique name, in reverse-DNS form. It stays the same across versions.
 - `version` — the app's version, in semver. It must match `version` in `package.json`.
 - `displayName` — the name people see in the shell's sidebar and in the CLI.
-- `permissions` — the Kernel access the app asks for, in the rule shape of  
-[hld-gateway-auth-rbac.md](./hld-gateway-auth-rbac.md) §4. The operator sees it at install and  
-decides what to grant.
+- `permissions` — the Kernel access the app needs, in the rule shape of  
+[hld-gateway-auth-rbac.md](./hld-gateway-auth-rbac.md) §4. Install creates the app's service account and grants it  
+exactly these rules (§7.2).
 
 ### 6.3 The UI module
 
@@ -170,7 +171,7 @@ Install reads the five keys of `mdk-app.yaml` (§6.2):
 - `id` — the default installed name.
 - `version` — the exact version, pinned in the project's `package.json`.
 - `displayName` — shown to the operator, and in the shell's sidebar.
-- `permissions` — shown to the operator, who grants them in `mdk.yaml`; install grants nothing.
+- `permissions` — granted to the app's service account, as a role and binding install writes in `spec.rbac` (§7.2).
 - `config` — the defaults the app runs with, unless the operator overrides them in `mdk.yaml`.
 
 ### 7.1 Flow
@@ -178,9 +179,10 @@ Install reads the five keys of `mdk-app.yaml` (§6.2):
 ```mermaid
 flowchart LR
   A["Operator runs<br/>mdk app add"] --> B["Fetch the package<br/>from the npm registry"]
-  B --> C["Check peer dependencies,<br/>name and routes,<br/>generates service account"]
-  C --> D["Add it to package.json,<br/>install with no scripts;<br/>record it in mdk.yaml"]
-  D --> E["Operator grants its<br/>permissions and restarts"]
+  B --> C["Check peer dependencies,<br/>name and routes"]
+  C --> D["Create its service account,<br/>granted the permissions<br/>it requests"]
+  D --> E["Add it to package.json,<br/>install with no scripts;<br/>record app and grant in mdk.yaml"]
+  E --> F["auto live reloads<br/>the stack"]
 ```
 
 
@@ -195,7 +197,8 @@ $ mdk app add @tetherto/mdk-app-sentinel@0.2.0
 ✔ Serves      4 routes under /apps/sentinel/ and 4 MCP tools
 ✔ Adds        its UI to the shell
 ✔ Installed   23 dependencies, no install scripts run
-✔ Permission  grant its permissions in spec.rbac, then restart the stack: mdk run
+✔ Granted     service account app:sentinel: read, write on devices miner/*
+✔ Ready       restart the stack to start it: mdk run
 ```
 
 ### 7.2 What install writes, and what the operator adds
@@ -204,25 +207,27 @@ Install writes two files in the project, side by side:
 
 - `package.json` — the app as a dependency, at its exact version. A plain `npm install` in the
 project therefore restores every app and all its dependencies, on this machine or a new one.
-- `mdk.yaml` — the app entry, beside the plugins and policy it already holds. The operator adds
-the rest:
+- `mdk.yaml` — the app entry, beside the plugins and policy it already holds, and the app's grant:
+a role holding the rules from its `permissions`, bound to its service account. The operator only
+adds config overrides, and may narrow the role:
 
 ```yaml
+spec:
   apps:
     - name: sentinel                         # written by install; operator-owned handle
       package: "@tetherto/mdk-app-sentinel"  # written by install
-      serviceAccount: app:sentinel 
+      serviceAccount: app:sentinel           # written by install; the identity its runtime calls the Kernel with
       config:                                # added by the operator, only to override a default
         driftThresholdPct: 10
-  rbac:                                      # added by the operator, to grant the app's permissions
+  rbac:
     roles:
-      - name: app-sentinel
+      - name: app-sentinel                   # written by install, from permissions in mdk-app.yaml
         rules:
-          - apiGroups: [kernel]
-            resources: [devices, telemetry]
-            verbs: [get, list, watch]
+          - resources: [devices]
+            verbs: [read, write]
+            resourceNames: ["miner/*"]       # the operator may narrow it, e.g. to "miner/antminer/antminer-a/*"
     bindings:
-      - role: app-sentinel
+      - role: app-sentinel                   # written by install
         subjects: [{ kind: ServiceAccount, name: app:sentinel }]
 ```
 
