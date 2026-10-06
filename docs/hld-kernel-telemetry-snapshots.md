@@ -168,6 +168,24 @@ metric:
 
 The runtime calls each distinct handler once per sweep and extracts one value per metric from the result.
 
+### Storage growth
+
+A worker polling every 5s and keeping every point grows without bound. Two mechanisms, and they
+compose rather than compete.
+
+**Rollup.** The runtime resamples older data into a coarser window — aggregating with `avg` or `sum`
+— and drops the granular points behind it. Recent data stays at poll resolution while older data
+thins out. MOS already runs this in production, so it is a known quantity rather than a new design.
+
+**Cold storage.** Granular data moves out of Hyperbee entirely into separate long-term archival, with
+a reverse path that loads a range back into queryable form on demand. Full resolution stays
+recoverable, at the cost of a restore step before it can be read.
+
+Rollup bounds the hot store and is enough for dashboards and reports; cold storage is what you add
+when a range has to stay recoverable at full resolution. The retention policy — how long to keep
+poll resolution, which window to roll up into, when to archive — belongs in worker config alongside
+`telemetryPollIntervalMs`.
+
 ---
 
 
@@ -240,6 +258,21 @@ const agg = await mdkClient.pullAggregate({
 return { hashrate: agg.ops.hashrate_total, avgPerMiner: agg.ops.hashrate_avg, byContainer: agg.ops.by_container }
 ```
 
+**Aggregating on every call is wasteful over a large range.** Two plugins asking the same question
+seconds apart would rescan the same data. The runtime caches aggregate results in memory under a TTL
+set in `mdk.yaml`, alongside the other worker settings:
+
+```yaml
+config:
+  telemetryPollIntervalMs: 10000
+  aggregateCacheTtlMs: 10000
+```
+
+The cache key is the op spec plus the device set and time range, so two plugins asking the same
+question share a result while a different grouping or window computes its own. A TTL shorter than
+the poll interval is wasted work — no new data has been collected in between — which makes one poll
+interval the sensible floor.
+
 ---
 
 
@@ -282,12 +315,14 @@ nearest one it holds.
 
 A worker storing every 5s, serving a request for 7s:
 
-| Requested sample | Returned reading | Why |
-|---|---|---|
-| 0s | 0s | exact |
-| 7s | **5s** | nearer than 10s |
-| 14s | **15s** | nearer than 10s |
-| 21s | 20s | nearer than 25s |
+
+| Requested sample | Returned reading | Why             |
+| ---------------- | ---------------- | --------------- |
+| 0s               | 0s               | exact           |
+| 7s               | **5s**           | nearer than 10s |
+| 14s              | **15s**          | nearer than 10s |
+| 21s              | 20s              | nearer than 25s |
 
 
 ---
+
