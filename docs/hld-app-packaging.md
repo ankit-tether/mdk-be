@@ -27,7 +27,8 @@ CLI commands that build and install it.
 1. **One standard.** Dashboards, watchers, reporting tools and agents all ship in the same shape,
   including our reference apps.
 2. **Install from a known, immutable source.** Apps install from an npm registry the company
-  already trusts, at an exact version, with no build step and no install scripts on the site box.
+  already trusts, or from a public or private GitHub repository, at an exact version (or commit),
+  with no build step and no install scripts on the site box.
 3. **Build once, install anywhere.** The package is identical on every instance. Everything
   specific to one instance (installation ID, keys, credentials, config values, installed name) is
   created at install time and never ships with the app.
@@ -64,8 +65,9 @@ package; the app's code runs in its runtime and, for the UI, in the browser.
 
 ### 4.1 npm package, installed with npm
 
-The app is an ordinary npm package, published to the company's registry or to npmjs.
-`mdk app add @tetherto/mdk-app-sentinel@0.2.0` installs it through npm on the site box.
+The app is an ordinary npm package, published to the company's registry or to npmjs, or kept in a
+public or private GitHub repository. `mdk app add @tetherto/mdk-app-sentinel@0.2.0` or
+`mdk app add github:tetherto/mdk-app-sentinel#v0.2.0` installs it through npm on the site box.
 
 **Pros**
 
@@ -77,10 +79,14 @@ install this way.
 - **Proof of origin, where available** — npmjs can record which code repository and which
 automated build produced a package (`npm publish --provenance`), so anyone can check where it came
 from.
+- **GitHub repositories work too** — npm installs straight from a public or private GitHub
+repository, so teams that do not publish to a registry can still ship apps in the same shape.
 
 **Cons**
 
-- **Needs registry access at install** — offline sites need a registry mirror.
+- **Needs registry or GitHub access at install** — offline sites need a registry mirror.
+- **GitHub installs skip the registry's controls** — no registry scanning or audit; the repository's
+own access control and branch protection are what the company relies on.
 
 ### 4.2 Signed app bundle
 
@@ -119,6 +125,7 @@ measured.
 **We choose the npm package for v1.0, and will support the signed bundle later.** npm keeps apps
 on a known source inside the company's security boundary; a tarball or zip from outside it is
 riskier, and some companies will not allow it.
+
 
 ---
 
@@ -169,7 +176,7 @@ the reference for how an app UI is written.
 Install reads the five keys of `mdk-app.yaml` (§6.2):
 
 - `id` — the default installed name.
-- `version` — the exact version, pinned in the project's `package.json`.
+- `version` — the exact version, pinned in the project's `package.json`
 - `displayName` — shown to the operator, and in the shell's sidebar.
 - `permissions` — granted to the app's service account, as a role and binding install writes in `spec.rbac` (§7.2).
 - `config` — the defaults the app runs with, unless the operator overrides them in `mdk.yaml`.
@@ -178,7 +185,7 @@ Install reads the five keys of `mdk-app.yaml` (§6.2):
 
 ```mermaid
 flowchart LR
-  A["Operator runs<br/>mdk app add"] --> B["Fetch the package<br/>from the npm registry"]
+  A["Operator runs<br/>mdk app add"] --> B["Fetch the package<br/>from the npm registry<br/>or GitHub (tag → SHA)"]
   B --> C["Check peer dependencies,<br/>name and routes"]
   C --> D["Create its service account,<br/>granted the permissions<br/>it requests"]
   D --> E["Add it to package.json,<br/>install with no scripts;<br/>record app and grant in mdk.yaml"]
@@ -201,11 +208,22 @@ $ mdk app add @tetherto/mdk-app-sentinel@0.2.0
 ✔ Ready       restart the stack to start it: mdk run
 ```
 
+The same app from a private GitHub repository:
+
+```text
+$ mdk app add github:acme/mdk-app-sentinel#v0.2.0
+✔ Fetched     github:acme/mdk-app-sentinel#v0.2.0 (commit 3f9c2ab) using GITHUB_TOKEN
+✔ Pinned      to commit 3f9c2ab; tag v0.2.0 matches version 0.2.0
+✔ Compatible  peer dependencies match this instance (mdk 1.2.0)
+...
+```
+
 ### 7.2 What install writes, and what the operator adds
 
 Install writes two files in the project, side by side:
 
-- `package.json` — the app as a dependency, at its exact version. A plain `npm install` in the
+- `package.json` — the app as a dependency, at its exact version, or for a GitHub source at its
+commit SHA (e.g. `"github:acme/mdk-app-sentinel#3f9c2ab…"`). A plain `npm install` in the
 project therefore restores every app and all its dependencies, on this machine or a new one.
 - `mdk.yaml` — the app entry, beside the plugins and policy it already holds, and the app's grant:
 a role holding the rules from its `permissions`, bound to its service account. The operator only
@@ -215,7 +233,7 @@ adds config overrides, and may narrow the role:
 spec:
   apps:
     - name: sentinel                         # written by install; operator-owned handle
-      package: "@tetherto/mdk-app-sentinel"  # written by install
+      package: "@tetherto/mdk-app-sentinel"  # written by install; or "github:acme/mdk-app-sentinel"
       serviceAccount: app:sentinel           # written by install; the identity its runtime calls the Kernel with
       config:                                # added by the operator, only to override a default
         driftThresholdPct: 10
@@ -240,8 +258,8 @@ spec:
 | --------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `mdk create app <name>`                                   | Developer            | Scaffold `mdk-app.yaml`, a `package.json` ready to publish, `plugin/` (today's plugin template) and `ui/` with its index |
 | `mdk run app <name>`                                      | Developer, operator  | Start one app's runtime alone, like `mdk run worker <name>`                                                              |
-| `mdk app validate <path>`                                 | Developer, CI, index | Check the package before `npm publish`                                                                                   |
-| `mdk app add <package>`                                   | Operator             | Install from the registry (§7)                                                                                           |
+| `mdk app validate <path>`                                 | Developer, CI, index | Check the package before `npm publish` or tagging a GitHub release                                                       |
+| `mdk app add <package>`                                   | Operator             | Install from the registry, or from a public/private GitHub repo with `github:<owner>/<repo>#<tag\|sha>` (§7)             |
 | `mdk get apps` · `mdk describe app <name>` · `mdk status` | Operator             | Installed apps, versions, grants and state                                                                               |
 
 
