@@ -374,7 +374,6 @@ sequenceDiagram
 
   E->>H: read { cursors, nextEval, episodes }
   E->>W: pullSnapshot since { ts: nextEval - longest history } (warm-up)
-  Note over E: readings rebuild series buckets; no evaluation before nextEval
   E->>W: continue from the checkpointed cursors
   Note over E: evaluation resumes at nextEval with the same episodes and IDs
 ```
@@ -504,7 +503,7 @@ read-ahead bound of `mergeLogs`.
 
 Until the cursor read ships, the engine runs against simulated sources, as in the proof of concept;
 only the pull loops change when it does.
-
+<!-- 
 ## 11. Open questions
 
 - Scoped watermarks per rule: worth the extra state, or is one global watermark enough at IVHM's
@@ -518,10 +517,11 @@ only the pull loops change when it does.
 - Promotion criteria per severity: minimum labeled findings and precision target
 - Whether the shared infrastructure comes from the YAML overlay or from the
   [site topology graph](./hld-site-topology-graph.md); the engine only needs the lookups of §7
-- Raw retention on Worker boxes, once disk growth is measured on IVHM
+- Raw retention on Worker boxes, once disk growth is measured on IVHM -->
 
 
 ## 13. Alternatives considered
+> Ignore this section, as it talks about discarded ideas which may be useful later. 
 
 ### 13.1 Push-based telemetry: a per-Worker log
 
