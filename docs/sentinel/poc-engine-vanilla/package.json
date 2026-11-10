@@ -1,0 +1,13 @@
+{
+  "name": "sentinel-poc-vanilla",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Event-time rules engine for Sentinel in plain JavaScript: rules as functions, async iterators, deterministic replay, checkpoint and resume",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

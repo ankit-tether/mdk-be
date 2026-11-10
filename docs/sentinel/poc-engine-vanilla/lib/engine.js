@@ -1,17 +1,19 @@
 'use strict'
 
 const { createHash } = require('node:crypto')
-const { scan, withLatestFrom, concatMap, share } = require('rxjs')
 const { BUCKET_MS, record, prune, view } = require('./series')
 
 const EVAL_EVERY_MS = BUCKET_MS
 
 // Everything the engine knows lives in this one plain object, so a checkpoint is JSON.stringify(state)
-// and a restart is engine$(rest, { initial: JSON.parse(checkpoint) }).
+// and a restart is runEngine(rest, { state: JSON.parse(checkpoint) }).
 function initialState () {
   return { series: {}, watermarks: {}, nextEval: null, episodes: {} }
 }
 
+// Applies one block to the state and returns the finding events it produced.
+// Readings only fill buckets. Only a sweep marker moves event time forward, so it is the only block that can
+// trigger an evaluation; this is what makes the result independent of how blocks from different logs interleave.
 function step (state, block, rules, site) {
   const events = []
 
@@ -21,25 +23,28 @@ function step (state, block, rules, site) {
       const series = state.series[key] || (state.series[key] = { first: null, buckets: {} })
       record(series, block.ts, value)
     }
-    return { state, events }
+    return events
   }
 
-  if (block.type !== 'sweep') return { state, events }
+  if (block.type !== 'sweep') return events
 
   state.watermarks[block.worker] = block.ts
   const wm = watermark(state, site)
-  if (wm === null) return { state, events }
+  if (wm === null) return events
 
+  // One watermark jump can cross several minute boundaries (a slow Worker catching up); each is evaluated in order,
+  // as if the blocks had arrived on time.
   if (state.nextEval === null) state.nextEval = Math.ceil(wm / EVAL_EVERY_MS) * EVAL_EVERY_MS
   while (state.nextEval <= wm) {
     evaluate(state, rules, site, state.nextEval, events)
     state.nextEval += EVAL_EVERY_MS
   }
 
+  // Keep one bucket beyond the longest declared history, so the oldest window a rule may ask for stays complete.
   const horizon = Math.max(0, ...rules.flatMap((r) => Object.values(r.inputs).map((i) => i.historyMs)))
   for (const series of Object.values(state.series)) prune(series, state.nextEval - horizon - EVAL_EVERY_MS)
 
-  return { state, events }
+  return events
 }
 
 // Event time, not arrival time: rules for minute M run only once every Worker has swept past M.
@@ -58,6 +63,7 @@ function evaluate (state, rules, site, at, events) {
     for (const key of keysFor(r, site)) {
       let hit
       let clearHit
+      // A failing rule must never stop the others: its error becomes an event and its episode is left as it was.
       try {
         const ctx = context(r, key, state, site, at)
         hit = Boolean(r.when(ctx))
@@ -137,21 +143,26 @@ function advance (state, r, key, at, hit, clearHit, events) {
   }
 }
 
+// Derived only from the rule version, the key and the episode start, so a replay or a restart reproduces the same ID
+// and the case engine can drop duplicates.
 function findingId (rule, key, firstSeen) {
   return createHash('sha256').update(`${rule}|${key}|${firstSeen}`).digest('hex').slice(0, 12)
 }
 
-// rules$ is broadcast state: push a new rule set and the next block is evaluated with it.
-function engine$ (blocks$, { rules$, site, initial = initialState() }) {
-  return blocks$.pipe(
-    withLatestFrom(rules$),
-    scan((acc, [block, rules]) => step(acc.state, block, rules, site), { state: initial, events: [] }),
-    share()
-  )
+// Live or replay: blocks is any iterable or async iterable. `rules` may be a function, read on every block, so
+// swapping the rule set it returns applies from the next block with no restart.
+async function * runEngine (blocks, { rules, site, state = initialState() }) {
+  const currentRules = typeof rules === 'function' ? rules : () => rules
+  for await (const block of blocks) {
+    yield * step(state, block, currentRules(), site)
+  }
 }
 
-function events (run$) {
-  return run$.pipe(concatMap((acc) => acc.events))
+// The synchronous form, for backtests and tests over an array of blocks.
+function replay (blocks, { rules, site, state = initialState() }) {
+  const events = []
+  for (const block of blocks) events.push(...step(state, block, rules, site))
+  return { events, state }
 }
 
-module.exports = { engine$, events, initialState, step }
+module.exports = { initialState, step, runEngine, replay }

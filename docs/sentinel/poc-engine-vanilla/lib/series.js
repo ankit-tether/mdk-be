@@ -4,6 +4,8 @@ const { ms } = require('./duration')
 
 const BUCKET_MS = 60_000
 
+// A series keeps one bucket per minute (sum, count, min, max and the latest value) instead of raw readings, so memory
+// is bounded by the declared history whatever the Worker's poll interval.
 function record (series, ts, value) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return
   const k = Math.floor(ts / BUCKET_MS)

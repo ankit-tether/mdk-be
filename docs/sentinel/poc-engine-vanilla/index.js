@@ -1,12 +1,12 @@
 'use strict'
 
 const assert = require('node:assert/strict')
-const { from, merge, of } = require('rxjs')
-const { engine$, events } = require('./lib/engine')
+const { runEngine, replay } = require('./lib/engine')
+const { mergeLogs } = require('./lib/merge')
 const rules = require('./rules')
 const { site, T0 } = require('./sim/site')
 const { generate } = require('./sim/generate')
-const { run } = require('./sim/run')
+const { asLiveLog } = require('./sim/logs')
 
 const { byWorker, interleaved } = generate(site, { start: T0, hours: 4, seed: 7 })
 
@@ -22,25 +22,36 @@ const print = (e) => {
 }
 
 async function main () {
-  console.log(`Replaying ${interleaved.length} blocks from ${site.workers.length} Workers (4 h of event time)\n`)
+  console.log(`Streaming ${interleaved.length} blocks from ${site.workers.length} live Worker logs (4 h of event time)\n`)
 
-  const live$ = engine$(from(interleaved), { rules$: of(rules), site })
-  await new Promise((resolve, reject) => events(live$).subscribe({ next: print, error: reject, complete: resolve }))
+  const logs = site.workers.map((w) => asLiveLog(byWorker[w]))
+  const live = []
+  for await (const event of runEngine(mergeLogs(logs), { rules, site })) {
+    print(event)
+    live.push(event)
+  }
 
-  const inOrder = await run(from(interleaved), { rules, site })
+  const inOrder = replay(interleaved, { rules, site })
+  assert.deepEqual(live, inOrder.events)
 
-  const burst = await run(merge(...site.workers.map((w) => from(byWorker[w]))), { rules, site })
+  const burst = replay(site.workers.flatMap((w) => byWorker[w]), { rules, site })
   assert.deepEqual(burst.events, inOrder.events)
 
   const cut = Math.floor(interleaved.length / 2)
-  const first = await run(from(interleaved.slice(0, cut)), { rules, site })
+  const first = replay(interleaved.slice(0, cut), { rules, site })
   const checkpoint = JSON.stringify(first.state)
-  const resumed = await run(from(interleaved.slice(cut)), { rules, site, initial: JSON.parse(checkpoint) })
+  const resumed = replay(interleaved.slice(cut), { rules, site, state: JSON.parse(checkpoint) })
   assert.deepEqual([...first.events, ...resumed.events], inOrder.events)
 
+  const started = process.hrtime.bigint()
+  replay(interleaved, { rules, site })
+  const ms = Number(process.hrtime.bigint() - started) / 1e6
+
   console.log('\nChecks')
+  console.log('  same findings from the merged live logs as from an in-order replay')
   console.log('  same findings when one Worker\'s whole log arrives before the other\'s (event time, not arrival time)')
   console.log(`  same findings after a restart from a ${(checkpoint.length / 1024).toFixed(0)} KB JSON checkpoint at block ${cut}`)
+  console.log(`  replay of ${interleaved.length} blocks: ${ms.toFixed(0)} ms`)
 }
 
 main().catch((err) => {
