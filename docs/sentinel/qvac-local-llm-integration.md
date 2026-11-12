@@ -23,19 +23,23 @@ Our goal is to **maximize the developer experience of building and running local
   - On the developer's own machine.
   - On a shared inference machine on the site network, with the agent on the same network.
 
+
+
 ## Friction today
 
 - We install `@qvac/cli@~0.12` (~6 GB) globally. Users then copy `qvac.config.json` and must remember `--port 11500` and `--no-cancel-load-on-disconnect`.
-- The first run fetches ~2.5 GB peer-to-peer, which took about 10 minutes.
-- `qvac serve` writes KV cache entries to `~/.qvac/kv-cache` (~144 MB per 1.7k-token conversation) and never removes them. We ship our own reaper.
+- The first run fetches ~2.5 GB peer-to-peer, which took about 10-20 minutes.
+- `qvac serve` writes KV cache entries to `~/.qvac/kv-cache` (~144 MB per 1.7k-token conversation) and never removes them. 
+
+
 
 ## Ask
 
 1. How would QVAC recommend we integrate, given your roadmap and long-term maintenance? Is there an option we haven't considered? As input, these are the options we see so far:
-   - **Integrate the QVAC CLI into the MDK CLI.** `mdk` would start the models the agent needs, using a curated `qvac.config.json`.
-   - **Point users to the QVAC CLI and its official docs** to serve models, so MDK has no dependency on the QVAC CLI.
+  - **Integrate the QVAC CLI into the MDK CLI.** `mdk` would start the models the agent needs, using a curated `qvac.config.json`.
+  - **Point users to the QVAC CLI and its official docs** to serve models, so MDK has no dependency on the QVAC CLI.
 2. Is there an existing integration with another Tether product, for example WDK, that we should follow?
 3. Do you plan anything that removes our workarounds? For example:
-   - download progress and an HTTP fallback for model fetches
-   - KV cache eviction
+  - download progress and an HTTP fallback for model fetches
+  - KV cache eviction
 
