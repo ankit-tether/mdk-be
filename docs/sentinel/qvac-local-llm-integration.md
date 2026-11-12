@@ -31,11 +31,11 @@ Our goal is to **maximize the developer experience of building and running local
 
 ## Ask
 
-1. How would QVAC recommend we integrate, given your roadmap and long-term maintenance? As input, these are the options we see so far:
-  - **Integrate the QVAC CLI into the MDK CLI.** `mdk` would start the models the agent needs, using a curated `qvac.config.json`.
-  - **Point users to the QVAC CLI and its official docs** to serve models, so MDK has no dependency on the QVAC CLI.
-2. Is there an existing integration, for example WDK, that we should follow?
+1. How would QVAC recommend we integrate, given your roadmap and long-term maintenance? Is there an option we haven't considered? As input, these are the options we see so far:
+   - **Integrate the QVAC CLI into the MDK CLI.** `mdk` would start the models the agent needs, using a curated `qvac.config.json`.
+   - **Point users to the QVAC CLI and its official docs** to serve models, so MDK has no dependency on the QVAC CLI.
+2. Is there an existing integration with another Tether product, for example WDK, that we should follow?
 3. Do you plan anything that removes our workarounds? For example:
-  - download progress and an HTTP fallback for model fetches
-  - KV cache eviction
+   - download progress and an HTTP fallback for model fetches
+   - KV cache eviction
 
