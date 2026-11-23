@@ -217,6 +217,7 @@ const { rule } = require('@tetherto/sentinel-rules')
 
 module.exports = rule({
   id: 'anomaly.container.power_and_heat',
+  description: 'A miner is drawing well above its usual power while the container runs hotter than usual',
   version: 1,
   severity: 'P2',
   keyBy: 'container',
@@ -238,7 +239,7 @@ module.exports = rule({
 | ------------- | --------------------------------------------------------------------------------------- |
 | `id`          | Stable code, `domain.signal.condition` for symptoms, `domain.fault` for faults          |
 | `version`     | Integer, bumped on every change; findings record `id@version`                           |
-| `role`        | `symptom` or `fault`; drives the unexplained view (§8.3). Default `symptom`             |
+| `role`        | `symptom` (default) or `fault`; see below                                               |
 | `severity`    | `P1` to `P4`                                                                            |
 | `keyBy`       | `device`, `container`, `upstream(<medium>)` or `site`; what one evaluation is about     |
 | `inputs`      | Named series (`family`, `brand`, `model`, `metric`, `history`) or other rules' findings |
@@ -248,6 +249,17 @@ module.exports = rule({
 | `clear`       | `{ for, when? }`: how long, and optionally what, closes it; default is `!when`          |
 | `when`        | `(ctx) => boolean`, pure and synchronous                                                |
 | `description` | Plain-language meaning, stored with each finding                                        |
+
+**`role`: symptom or fault.** A symptom says *what* looks wrong; a fault says *why*.
+
+| Role      | Answers           | Usually reads               | Example                                                            |
+| --------- | ----------------- | --------------------------- | ------------------------------------------------------------------ |
+| `symptom` | What looks wrong? | Telemetry                   | `thermal.chip_temp.above_limit`: a miner is too hot                |
+| `fault`   | Why is it wrong?  | Symptom findings            | `cooling.flow_restricted`: the hot miners all share one coolant loop |
+
+The role is only a label: the engine evaluates both kinds the same way. It is used for one thing,
+the unexplained view (§8.3): every open symptom that no open fault explains. A long list shows where
+a new fault rule is needed.
 
 ### 4.2 What `when` receives
 
@@ -285,6 +297,7 @@ concept.
 // rules/performance/hashrate-below-floor.js: below 5 TH/s for over an hour, per miner
 module.exports = rule({
   id: 'performance.hashrate.below_floor',
+  description: 'Miner hashrate has stayed below the floor for over an hour',
   version: 1,
   severity: 'P2',
   keyBy: 'device',
@@ -300,6 +313,7 @@ module.exports = rule({
 // rules/performance/container-hashrate-down.js: even the best miner in the container is below 5 TH/s
 module.exports = rule({
   id: 'performance.container.hashrate_down',
+  description: 'Every miner in the container has been below the hashrate floor for over an hour',
   version: 1,
   severity: 'P1',
   keyBy: 'container',
@@ -314,6 +328,7 @@ module.exports = rule({
 // rules/faults/cooling-flow-restricted.js: hot miners on one loop, the rest of the site normal
 module.exports = rule({
   id: 'cooling.flow_restricted',
+  description: 'Coolant flow on this loop is likely restricted: several miners it feeds run hot while power is normal',
   version: 3,
   role: 'fault',
   severity: 'P2',
@@ -452,8 +467,8 @@ All three live under the app's `config.dataDir`.
 - **Evidence.** When a finding opens, and again when it closes, the readings behind it (from before
   `firstSeen` to the event) are read through the Kernel and copied into the log. A finding therefore
   stays replayable after the Workers' raw retention has cleared those readings
-- **Unexplained view.** An open `symptom` finding that no open `fault` finding reads is listed in the
-  unexplained view. Its size measures how much the fault rules cover
+- **Unexplained view.** Lists each open `symptom` finding that no open `fault` finding explains
+  (reads as an input). A short list means the fault rules cover what the site sees (§4.1)
 - **Consumers.** A case engine, the UI or a narrator subscribe to new events or read the views. They
   never write findings, only their own records, such as cases and labels
 
