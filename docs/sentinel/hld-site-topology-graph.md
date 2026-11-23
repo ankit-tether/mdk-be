@@ -1,6 +1,6 @@
-# Site Topology Graph — React Flow Editor and GraphRAG Context (HLD)
+# Site Topology Graph — Authoring and GraphRAG Context (HLD)
 
-> **Version:** 0.3.0  |  **Date:** 2026-11-05  |  **Status:** Draft
+> **Version:** 0.4.0  |  **Date:** 2026-11-23  |  **Status:** Draft
 
 ---
 
@@ -8,15 +8,15 @@
 
 The Operator Agent knows each device *type* from its `mdk-contract.json` and can read live telemetry. It does not know how devices relate: which power meter measures which devices, which cooling unit serves which container, what loses power when a breaker opens. So it can't answer correlation questions.
 
-This HLD adds a site topology graph. Operators connect real devices in a React Flow editor, the result is written to a graph database, and agents query that graph as GraphRAG context. It is the "Site State Model" vision from Gio. 
+This HLD adds a site topology graph. Operators describe how real devices relate, in one of two authoring modes: a **visual editor** (React Flow) or a **CSV file import**. The result is written to a graph database, and agents query that graph as GraphRAG context. It is the "Site State Model" vision from Gio.
 
 **Ground rules**
 
 1. **One source of truth.** The graph database holds every relationship. No other store keeps
   relationship data.
-2. **Nodes are registered devices only.** Every canvas node is picked from the Kernel's device list; the editor never creates devices.
-3. **The editor's output is a list of** `source|type|target` **edges**. Nothing else is persisted
-  from the canvas.
+2. **Nodes are registered devices only.** Every node is a device from the Kernel's device list; no authoring mode creates devices.
+3. **Every authoring mode outputs a list of** `source|type|target` **edges**. Nothing else is
+  persisted, whichever mode produced it.
 4. **Agents read the published graph only**, through fixed tools, and never edit.
 
 ---
@@ -25,17 +25,20 @@ This HLD adds a site topology graph. Operators connect real devices in a React F
 
 ## 2. Architecture
 
-Operators write the graph from the React Flow editor through the Gateway; the Operator Agent reads
-it over MCP as GraphRAG context.
+Operators write the graph through the Gateway, using either authoring mode. Both modes produce the
+same edge set and go through the same publish path (§6). The Operator Agent reads the graph over
+MCP as GraphRAG context.
 
 ```mermaid
 flowchart LR
-  ED["Topology editor<br/>React Flow"] -->|"HTTP"| GW["Gateway"]
+  ED["Mode A: Visual editor<br/>React Flow"] -->|"HTTP"| GW["Gateway"]
+  CSV["Mode B: CSV import<br/>source,type,target"] -->|"HTTP"| GW
   GW -->|"publish<br/>source#124;type#124;target"| DB[("Graph database")]
   AG["Operator Agent"] -->|"MCP"| MS["MCP tools"]
   MS -->|"GraphRAG"| DB
 
   style ED fill:#fff3e0,stroke:#ff9800,color:#000
+  style CSV fill:#fff3e0,stroke:#ff9800,color:#000
   style DB fill:#fff3e0,stroke:#ff9800,color:#000
 ```
 
@@ -43,8 +46,9 @@ flowchart LR
 
 ## 3. Nodes — the real device list
 
-The editor gets its nodes from a real-time `GET /devices` call through the Gateway when it loads.
-The Kernel owns which devices exist; the editor only places them.
+The device list comes from a real-time `GET /devices` call through the Gateway. The Kernel owns
+which devices exist; authoring only relates them. The visual editor uses the list to fill its node
+dropdown; CSV import uses it to validate every `source` and `target`.
 
 | Field | Content | Example |
 | --- | --- | --- |
@@ -53,6 +57,9 @@ The Kernel owns which devices exist; the editor only places them.
 
 - The node ID is the name RBAC already uses for devices, so `resourceNames` scope the graph with no
   new vocabulary.
+- **Metadata is read-only in the graph.** It always comes from the Kernel's device list. The visual
+  editor only lets the user pick a device ID, never edit its metadata, so CSV import doesn't take
+  metadata either. Both modes author edges only; to change metadata, change the device in the Kernel.
 
 ---
 
@@ -90,15 +97,21 @@ config:
 ```
 
 - **Overridable in `mdk.yaml`.** The operator can override `edgeTypes` under the app's `config` in
-  `mdk.yaml`: the same name replaces a default, a new name adds a type. The merged set is the only set the editor offers and publish accepts.
-- **No structural constraints.** Any device can connect to any device with any type. The editor
-  doesn't restrict family pairs, direction or cycles; the site decides.
+  `mdk.yaml`: the same name replaces a default, a new name adds a type. The merged set is the only set either authoring mode accepts.
+- **No structural constraints.** Any device can connect to any device with any type. Neither mode
+  restricts family pairs, direction or cycles; the site decides.
 - **Rules reach the agent as-is.** The rules of every type crossed during retrieval go into the
   agent's context (§7).
 
 ---
 
-## 5. Editor — React Flow
+## 5. Authoring modes
+
+There are two ways to author the graph. They differ only in how the operator produces the edge
+set; validation, publish, storage and agent access (§6–§8) are identical. A site can use either
+mode, or both, since they read and write the same graph.
+
+### 5.1 Mode A — Visual editor (React Flow)
 
 Built with React Flow 12 (`@xyflow/react`, MIT) and MDK React Components, in the app's `ui/`.
 
@@ -112,16 +125,94 @@ Built with React Flow 12 (`@xyflow/react`, MIT) and MDK React Components, in the
 The React Flow edge `id` is the `source|type|target` string itself, so duplicate edges can't exist
 on the canvas.
 
+### 5.2 Mode B — CSV file import
+
+For sites with many devices, or relationships that already live in a spreadsheet or asset
+register, the operator uploads a CSV file instead of drawing the graph.
+
+**File format.** One edge per row, with a required header row:
+
+```csv
+source,type,target
+powermeter/schneider/schneider-a/pm009,MEASURES,miner/whatsminer/whatsminer-a/wm041
+powermeter/schneider/schneider-a/pm009,CONTROLS,miner/whatsminer/whatsminer-a/wm041
+cooling/acme/cdu-a/cdu-c2a,COOLS,container/acme/container-a/c2
+container/acme/container-a/c2,CONTAINS,miner/whatsminer/whatsminer-a/wm041
+```
+
+- The header must be exactly `source,type,target`. Values are trimmed; blank lines are skipped.
+  An optional `# revision:` line may come before the header (§5.3).
+- `source` and `target` are Kernel device IDs (§3); `type` is a merged edge type (§4).
+- Duplicate rows collapse into one edge.
+- **No metadata columns.** Device metadata comes from the Kernel (§3); a file with any other column
+  is rejected.
+- **The file is the complete edge set**, the same as an editor publish: edges in the graph but not
+  in the file are deleted.
+
+**Flow.**
+
+1. **Start from the current graph.** The operator exports the current edges to CSV (§5.3), edits
+   the file, and re-uploads it. The export's revision becomes the import's `baseRevision`. For a
+   first load on an empty graph, the operator writes the file from scratch.
+2. **Dry run.** The upload goes to `POST /import?dryRun=true`. The app turns each row into a
+   `source|type|target` string and runs the same validation as publish (§6.3). The response lists
+   errors by row number, plus the diff: edges added, removed and unchanged. Nothing is written.
+3. **Confirm.** The operator reviews the diff and re-submits without `dryRun`. The app publishes
+   through the same transaction as the editor (§6.3); a stale `baseRevision` gets `409`.
+
+The whole file is rejected if any row fails validation; there is no partial import.
+
+### 5.3 Export to CSV
+
+The published graph can be exported to CSV from either mode: an **Export CSV** button in the
+visual editor, and the download step of the import flow. Both call `GET /export?format=csv`.
+
+```csv
+# revision: 9f2c1e
+source,type,target
+container/acme/container-a/c2,CONTAINS,miner/whatsminer/whatsminer-a/wm041
+cooling/acme/cdu-a/cdu-c2a,COOLS,container/acme/container-a/c2
+powermeter/schneider/schneider-a/pm009,CONTROLS,miner/whatsminer/whatsminer-a/wm041
+powermeter/schneider/schneider-a/pm009,MEASURES,miner/whatsminer/whatsminer-a/wm041
+```
+
+- **Same format as import.** The exported file can be re-imported unchanged, so export → edit →
+  import is a lossless round trip.
+- **Revision on the first line.** A `# revision:` comment line carries the revision the export was
+  taken at. On import, the app reads it as `baseRevision` unless the caller passes one explicitly.
+  It is the only comment line the importer accepts.
+- **Sorted** by `source`, then `type`, then `target`, so two exports of the same graph are
+  byte-identical and diff cleanly in version control.
+- **Published graph only.** Unpublished canvas work isn't exported, and neither is device metadata
+  (§3).
+- **Scoped by RBAC.** The export contains only edges whose endpoints the caller can see through
+  their `devices` `resourceNames`. A user who can't see every device can export but can't import,
+  since their file would delete edges they can't see.
+
+### 5.4 Choosing a mode
+
+| | Mode A — Visual editor | Mode B — CSV import |
+| --- | --- | --- |
+| Best for | Small sites, spot changes, reviewing structure visually | Large sites, bulk changes, initial load from an existing asset register |
+| Input | Drag-and-drop on a canvas | `source,type,target` file |
+| Device check | Dropdown only offers Kernel devices | Every row validated against `GET /devices` |
+| Duplicates | Impossible; edge `id` is the edge string | Collapsed on import |
+| Preview before publish | Canvas is the preview | Dry run returns row errors and the diff |
+| Device metadata | Read-only, from the Kernel | Not accepted; from the Kernel |
+| Export to CSV | **Export CSV** button | Download step of the import flow |
+| Output | `source\|type\|target` edge set + `baseRevision` | Same |
+
 ---
 
 ## 6. Output and storage
 
 
 
-### 6.1 Editor output
+### 6.1 Edge set output
 
-The editor publishes the complete edge set as `source|type|target` strings, plus the revision it
-was based on. Node positions, viewport and styling are not part of the output.
+Both modes publish the complete edge set as `source|type|target` strings, plus the revision it was
+based on. The editor sends this JSON directly; CSV import builds it from the file's rows. Node
+positions, viewport and styling are not part of the output.
 
 ```json
 {
@@ -139,8 +230,8 @@ was based on. Node positions, viewport and styling are not part of the output.
 rejects anything that doesn't split cleanly.
 - The string is also the edge's identity everywhere: in the diff, in the database's uniqueness rule
 and in exports.
-- Placed but unconnected devices aren't sent; a `Device` node exists in the graph only once it has
-  a relationship.
+- Devices that aren't part of any edge aren't sent; a `Device` node exists in the graph only once
+  it has a relationship.
 - `revision` is a hash of the sorted edge set, computed by the app. It isn't stored.
 
 
@@ -156,10 +247,10 @@ Two things only: device nodes and typed relationships between them.
 | **Relationship**  | `type` (one of §4), `updatedBy`, `updatedAt`         | Directed from `source` to `target`; unique per `source\|type\|target` |
 
 
-Mapping from editor output to storage:
+Mapping from edge output to storage:
 
 
-| Editor string part       | Stored as                                                         |
+| Edge string part         | Stored as                                                         |
 | ------------------------ | ----------------------------------------------------------------- |
 | `source`                 | Start node, matched by `Device.id`                                |
 | `type`                   | Relationship type                                                 |
@@ -171,18 +262,26 @@ Mapping from editor output to storage:
 
 ### 6.3 Publish
 
-One transaction:
+The same transaction serves both modes:
 
 1. **Check the revision.** Hash the current edge set; if it doesn't match `baseRevision`, someone
-  published first and the editor gets `409`.
+  published first and the caller gets `409`.
 2. **Validate.** Every endpoint is a device returned by `GET /devices`; the type is in the merged
    edge-type config (§4); no self-loops.
 3. **Apply the diff.** Upsert endpoint `Device` nodes with their `id` and `metadata`. Compare the submitted strings with the stored ones; delete relationships that
   are gone and create new ones with `updatedBy` and `updatedAt`. Unchanged relationships aren't touched.
 4. **Respond** with the new revision and the diff. The app rebuilds the agent outline (§7) in memory.
 
-**Editor routes** (under `/apps/topology/`): `GET /edge-types`,
-`GET /graph` (edge strings and revision), `POST /validate`, `POST /publish`, `GET /export`.
+**Authoring routes** (under `/apps/topology/`):
+
+| Route | Used by | Purpose |
+| --- | --- | --- |
+| `GET /edge-types` | Both | Merged edge types (§4) |
+| `GET /graph` | Both | Edge strings and revision |
+| `POST /validate` | Mode A | Validate an edge set without writing |
+| `POST /publish` | Mode A | Publish an edge set (JSON, §6.1) |
+| `POST /import` | Mode B | Upload a CSV (`text/csv`); `baseRevision` and `dryRun` as query params |
+| `GET /export` | Both | Published edges as JSON, or as CSV with `?format=csv` (§5.3) |
 
 ---
 
