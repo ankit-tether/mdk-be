@@ -1,6 +1,6 @@
 # MDK Release and Deprecation Policy (HLD)
 
-> **Version:** 0.3.1  |  **Date:** 2026-11-24  |  **Status:** Draft
+> **Version:** 0.4.0  |  **Date:** 2026-11-24  |  **Status:** Draft
 >
 > How MDK versions and schedules releases, which versions receive fixes and for how long, and how an interface is deprecated and removed. Intended home: `docs/reference/releases.md` in the MDK repo, replacing `docs/reference/versioning.md`. Where another HLD differs on versioning, compatibility or deprecation, this document supersedes it. Branching and the step-by-step release procedure are in the release process documentation, not here; [Appendix A](#appendix-a-release-process-moves-to-releasingmd) holds the process parts of this policy until they move to `RELEASING.md`.
 
@@ -314,6 +314,11 @@ Every deprecation gets an ID, `MDK-DEP-NNNN`, assigned in order and never reused
 
 `MDK_NO_DEPRECATION=1` silences runtime warnings; `MDK_THROW_DEPRECATION=1` turns them into errors, so CI catches a deprecated call before the removal does. The shared helper behind these variables and the Gateway headers are still to be built ([§10](#10-tooling-to-build)).
 
+**Deprecating an interface never deprecates a release.** 
+- A deprecated interface is flagged where people meet it: the editor, the logs, the CLI, the docs and the changelog. npm is not one of those places. 
+- `npm deprecate` on a version is kept for four cases: a broken release ([§8](#8-exceptions)), a MAJOR at end of life ([§5.1](#51-major-lifecycle)), a retired package, and every `0.x` version when `1.0.0` ships ([§9](#9-the-100-release)). 
+- Older MINORs of a supported MAJOR aren't npm-deprecated. An npm deprecation tells everyone who installs a version not to use it, and it can't say which interface is the problem. An older MINOR still works and upgrades directly, so the warning would be wrong, and it would teach people to ignore the ones that matter.
+
 ### 6.3 Deprecation window
 
 | Rule | Commitment |
@@ -415,7 +420,7 @@ A project created by `mdk create` belongs to its author, and MDK never requires 
 
 - Templates depend only on packages published to npm, at `^<version>` of the release; never on a `file:`, `link:` or workspace path, which leaves a dangling link when the target goes away
 - A release that changes generator output in a way existing projects must follow lists the steps under `Upgrade steps for generated projects` in its changelog entry, and ships them in `mdk upgrade` once it exists
-- `mdk doctor` checks that every `@tetherto/mdk-*` dependency resolves to a published package in the stack's MAJOR, and names any that don't
+- `mdk doctor` checks that every `@tetherto/mdk-*` dependency is on the stack's version and resolves to a published package, and names any that don't
 
 Before each release, CI runs an upgrade test:
 
@@ -455,8 +460,9 @@ A broken release isn't an exception but the remedy for one: npm versions can't b
 
 | Date | Event |
 | --- | --- |
+| Before the cut | `0.15.0`, the last `0.y`. If the [deprecation checklist](#a6-deprecating-an-interface) is agreed in time, it is tried here on the existing `MDK-DEP-0002` and `MDK-DEP-0005` |
 | 4 Dec 2026 | Release cut; `1.0.0-rc.1` published under `next` |
-| 16 Dec 2026 | `1.0.0`; `0.x` reaches end of life the same day |
+| 16 Dec 2026 | `1.0.0`. The same day `0.x` reaches end of life, and every `0.x` version of every `@tetherto/mdk-*` package is `npm deprecate`d with a message that points to `1.0.0` and the migration guide. Until then, only a broken `0.x` version is npm-deprecated |
 
 | | `1.0.0` |
 | --- | --- |
@@ -474,21 +480,24 @@ A broken release isn't an exception but the remedy for one: npm versions can't b
 
 ## 10. Tooling to build
 
-Parts of this policy rely on tooling that doesn't exist yet. Until an item ships, the fallback applies.
+Parts of this policy rely on tooling that doesn't exist yet. Until an item ships, the fallback applies. "Needed by" is the latest acceptable release; an item can land earlier. Anything that compares MAJOR versions stays in the backlog until `2.0.0` is planned.
 
 | Item | Section | Needed by | Until then |
 | --- | --- | --- | --- |
 | `engines.mdk` in the `mdk create` templates | [§7.1](#71-declaring-mdk-compatibility) | `1.0.0` | — |
+| [Deprecation checklist](#a6-deprecating-an-interface) and the two PR template checkboxes ([A.1](#a1-commits-and-pull-requests)) | [§6](#6-deprecation) | `1.0.0`; tried in `0.15.0` if agreed in time | — |
 | CI upgrade test | [§7.3](#73-migrations-and-generated-projects) | `1.0.0` | — |
 | Kernel store migration for `MDK-DEP-0001` | [§6.5](#65-reference-example-retiring-the-ork-name-mdk-dep-0001) | `1.0.0` | If it misses the cut, it ships in a `1.x` MINOR and the register follows |
 | `apiVersion` written by templates for `mdk-app.yaml`, `mdk-plugin.json` and `mdk-contract.json`, with the `contractVersion` alias | [§3.4](#34-schema-versions-apiversion) | A `1.x` MINOR | A missing field is a warning |
-| `engines.mdk` checks in `mdk validate`, `mdk add` and the Worker runtime | [§7.1](#71-declaring-mdk-compatibility) | A `1.x` MINOR | The range is informational |
+| `engines.mdk` warning in `mdk validate` when the running MDK is outside the range | [§7.1](#71-declaring-mdk-compatibility) | A `1.x` MINOR | The range is informational |
+| `engines.mdk` refusal in `mdk add` and the Worker runtime when the range excludes the running MAJOR | [§7.1](#71-declaring-mdk-compatibility) | Backlog: `2.0.0-rc.1` | The range is informational |
 | Shared runtime deprecation helper with `MDK_NO_DEPRECATION` and `MDK_THROW_DEPRECATION` | [§6.2](#62-how-a-deprecation-is-announced) | The first deprecation after `1.0.0` | Each warning is written by hand in the same format |
 | Gateway `Deprecation`, `Sunset` and `Link` headers | [§6.2](#62-how-a-deprecation-is-announced) | Before the first Gateway route is deprecated | — |
 | Automatic store snapshot before a migration | [§7.3](#73-migrations-and-generated-projects) | A `1.x` MINOR, once sized | Backup steps in the release notes |
-| Conformance check of partner Workers against every supported MAJOR | [§7.1](#71-declaring-mdk-compatibility) | `2.0.0` | The existing check, against the current release |
-| `mdk doctor` | [§7.3](#73-migrations-and-generated-projects) | `2.0.0-rc.1` | — |
-| `mdk upgrade` | [§7.3](#73-migrations-and-generated-projects) | `2.0.0-rc.1` | The migration guide, applied by hand |
+| Conformance check of partner Workers against every supported MAJOR | [§7.1](#71-declaring-mdk-compatibility) | Backlog: `2.0.0` | The existing check, against the current release |
+| `mdk doctor`, stack checks: every `@tetherto/mdk-*` package is on the same version ([§7.2](#72-one-version-per-stack)) and resolves to a published version that isn't npm-deprecated | [§7.3](#73-migrations-and-generated-projects) | A `1.x` MINOR | — |
+| `mdk doctor`, MAJOR checks: an app's or Worker's range against the running MAJOR | [§7.1](#71-declaring-mdk-compatibility) | Backlog: `2.0.0-rc.1` | — |
+| `mdk upgrade` | [§7.3](#73-migrations-and-generated-projects) | Backlog: `2.0.0-rc.1` | The migration guide, applied by hand |
 | End-of-life startup warning in maintenance PATCHes | [§11](#11-communication) | When `1.x` enters maintenance | — |
 
 ---
@@ -537,10 +546,13 @@ No. Features ship in MINORs. Only a breaking change, usually removing something 
 At least six months and two MINORs after it is deprecated. The three months' notice of the MAJOR that removes it overlaps that window; it isn't added on top.
 
 **What happens to `0.x` at `1.0`?**
-Until `1.0.0`, breaking changes ship only in a `0.y.0`, never in a PATCH, and only the latest `0.y` gets fixes. `1.0.0` removes what `0.y` deprecated, ships a manual migration guide, and ends `0.x` support ([§9](#9-the-100-release)).
+Until `1.0.0`, breaking changes ship only in a `0.y.0`, never in a PATCH, and only the latest `0.y` gets fixes. `1.0.0` removes what `0.y` deprecated, ships a manual migration guide, and ends `0.x` support. The same day, every `0.x` version is deprecated on npm ([§9](#9-the-100-release)).
 
 **Will upgrading MDK break my generated dashboard, app or Worker?**
 An app or a Worker: no, the templates use Stable interfaces only. A dashboard uses the UI toolkit, which is Experimental at `1.0.0`, so a MINOR can change a component it uses, and the changelog then lists the upgrade steps. You never recreate a project to upgrade it: packages aren't removed and peer dependency MAJORs don't move in a MINOR, and CI upgrade-tests projects scaffolded on older releases.
+
+**Why doesn't npm warn me that I'm on an older MINOR?**
+Because an older MINOR still works and upgrades directly to the newest release. npm warnings are kept for broken, end-of-life and `0.x` versions. Deprecated interfaces warn where you use them ([§6.2](#62-how-a-deprecation-is-announced)), and the release notes say what a newer release fixes.
 
 **How does my Worker or app say which MDK it supports?**
 `engines.mdk` in `package.json`, and `apiVersion` in its config files ([§7.1](#71-declaring-mdk-compatibility)).
@@ -556,7 +568,7 @@ These parts are process, not promises to users. They move to `RELEASING.md` when
 
 ### A.1 Commits and pull requests
 
-Commits use Conventional Commits with the package as scope (`fix(kernel):`, `feat(client):`), so every changelog entry names its package. A breaking commit adds `!` after the type (`feat(client)!:`) and a `BREAKING CHANGE:` footer; a deprecating commit adds `DEPRECATED: MDK-DEP-NNNN`. The PR template asks whether a change breaks or deprecates something; either answer requires a changelog entry in the matching section.
+Commits use Conventional Commits with the package as scope (`fix(kernel):`, `feat(client):`), so every changelog entry names its package. A breaking commit adds `!` after the type (`feat(client)!:`) and a `BREAKING CHANGE:` footer; a deprecating commit adds `DEPRECATED: MDK-DEP-NNNN`. The PR template gains two checkboxes: "changes a public interface" and "deprecates a public interface". Ticking either one requires a changelog entry in the matching section and the tech lead's review.
 
 ### A.2 Roles
 
@@ -661,3 +673,16 @@ The GitHub Release is the changelog entry, unchanged, under this header:
 
 <changelog entry>
 ```
+
+### A.6 Deprecating an interface
+
+One way to do it, whatever the interface. The change author does every step in the same PR; the tech lead approves.
+
+1. **Take the next ID** in the [register](#64-deprecations-register) and add the row
+2. **Keep the old interface working.** Where possible, implement it on top of the replacement, so both get the same fixes
+3. **Mark it** where its users meet it ([§6.2](#62-how-a-deprecation-is-announced)): `@deprecated MDK-DEP-NNNN` in JSDoc for an export or prop; one runtime warning per process, or one CLI `stderr` line, in the `MDK-DEP-NNNN` format; `deprecated: true` for a Gateway route or MCP tool; a `mdk validate` warning for a manifest field
+4. **Move first-party use off it.** Templates, examples, guides and skills use the replacement from this PR on, so no new project starts on the deprecated interface
+5. **Document it.** A `Deprecated` changelog entry with the ID, the replacement and the earliest removal, and a "Deprecated" badge on the reference page
+6. **Label it.** A `DEPRECATED: MDK-DEP-NNNN` commit footer and the PR checkbox ([A.1](#a1-commits-and-pull-requests))
+
+Removal happens in a MAJOR, only if the [MAJOR announcement](#42-major-releases) lists the ID. That PR deletes the interface, its markers and its warning; adds `Removed` and `Breaking changes` entries and a migration guide section; and sets the register row to Removed.
