@@ -1,6 +1,6 @@
 # MDK Release and Deprecation Policy (HLD)
 
-> **Version:** 0.3.0  |  **Date:** 2026-11-21  |  **Status:** Draft
+> **Version:** 0.3.1  |  **Date:** 2026-11-24  |  **Status:** Draft
 >
 > How MDK versions and schedules releases, which versions receive fixes and for how long, and how an interface is deprecated and removed. Intended home: `docs/reference/releases.md` in the MDK repo, replacing `docs/reference/versioning.md`. Where another HLD differs on versioning, compatibility or deprecation, this document supersedes it. Branching and the step-by-step release procedure are in the release process documentation, not here; [Appendix A](#appendix-a-release-process-moves-to-releasingmd) holds the process parts of this policy until they move to `RELEASING.md`.
 
@@ -38,7 +38,7 @@ MDK ships every two weeks, but nothing tells an integrator or an operator what a
 
 ### 3.1 Version numbers
 
-The internal `@tetherto/mdk-*` dependencies are pinned to `^<version>` of the same release. Mixing packages from different releases in one stack is not supported; [§7.2](#72-version-skew) covers components on different hosts.
+The internal `@tetherto/mdk-*` dependencies are pinned to `^<version>` of the same release. Mixing packages from different releases in one stack is not supported ([§7.2](#72-one-version-per-stack)).
 
 | Part | Increments when a release | What you do |
 | --- | --- | --- |
@@ -389,23 +389,15 @@ Workers and apps declare the MDK versions they support in `package.json`, in the
 
 The catalog and the supported-Workers list show the range each entry was tested against. Partner Workers are checked with the existing contract conformance check against every supported MAJOR, and the list shows the result per MAJOR.
 
-### 7.2 Version skew
+### 7.2 One version per stack
 
-Components can run on different hosts and be upgraded at different times. Within a MAJOR:
+The supported configuration is every `@tetherto/mdk-*` package in a stack on the **same version**. That includes components on different hosts: Kernel, Gateway, app runtime, MCP, Workers runtime and UI. Each release is built and tested as one set, and compatibility between packages from different releases is not developed, tested or promised.
 
-| Component | Supported skew |
-| --- | --- |
-| Kernel | The newest component |
-| Gateway, app runtime, MCP | Same release as the Kernel, or any release of the same MAJOR up to **six months** older |
-| Workers | Any release at or below the Kernel's, with an `apiVersion` the Kernel accepts |
-| UI packages | Same release as the Gateway, or older |
+- Upgrade every MDK package in the stack to the same release, together. Prefer the latest release: it is the one that receives fixes ([§5.2](#52-where-fixes-ship))
+- Where a release is known to work alongside another version, its release notes say so. That statement covers that release only and is not a standing guarantee
+- The order, timing and staging of a rollout at a site belong to the site's own runbook, not to this policy
 
-```mermaid
-flowchart LR
-  K["1. Kernel"] --> G["2. Gateway,<br/>app runtime, MCP"] --> W["3. Workers<br/>and apps"] --> U["4. UI"]
-```
-
-Across a MAJOR, upgrade the whole stack together after reading the migration guide.
+An external Worker or app follows the same rule for the MDK packages it depends on. Its `^` range lets a site install the stack's version without changing the Worker's or app's code ([§7.1](#71-declaring-mdk-compatibility)).
 
 ### 7.3 Migrations and generated projects
 
@@ -425,7 +417,7 @@ A project created by `mdk create` belongs to its author, and MDK never requires 
 - A release that changes generator output in a way existing projects must follow lists the steps under `Upgrade steps for generated projects` in its changelog entry, and ships them in `mdk upgrade` once it exists
 - `mdk doctor` checks that every `@tetherto/mdk-*` dependency resolves to a published package in the stack's MAJOR, and names any that don't
 
-Before each release, CI runs an upgrade test. It also starts the candidate Kernel with the oldest Gateway inside the [skew window](#72-version-skew).
+Before each release, CI runs an upgrade test:
 
 ```mermaid
 flowchart LR
@@ -489,7 +481,6 @@ Parts of this policy rely on tooling that doesn't exist yet. Until an item ships
 | `engines.mdk` in the `mdk create` templates | [§7.1](#71-declaring-mdk-compatibility) | `1.0.0` | — |
 | CI upgrade test | [§7.3](#73-migrations-and-generated-projects) | `1.0.0` | — |
 | Kernel store migration for `MDK-DEP-0001` | [§6.5](#65-reference-example-retiring-the-ork-name-mdk-dep-0001) | `1.0.0` | If it misses the cut, it ships in a `1.x` MINOR and the register follows |
-| CI skew check: candidate Kernel with the oldest Gateway in the window | [§7.2](#72-version-skew) | The first `1.x` MINOR | — |
 | `apiVersion` written by templates for `mdk-app.yaml`, `mdk-plugin.json` and `mdk-contract.json`, with the `contractVersion` alias | [§3.4](#34-schema-versions-apiversion) | A `1.x` MINOR | A missing field is a warning |
 | `engines.mdk` checks in `mdk validate`, `mdk add` and the Worker runtime | [§7.1](#71-declaring-mdk-compatibility) | A `1.x` MINOR | The range is informational |
 | Shared runtime deprecation helper with `MDK_NO_DEPRECATION` and `MDK_THROW_DEPRECATION` | [§6.2](#62-how-a-deprecation-is-announced) | The first deprecation after `1.0.0` | Each warning is written by hand in the same format |
@@ -661,6 +652,7 @@ The GitHub Release is the changelog entry, unchanged, under this header:
 | | |
 | --- | --- |
 | Safe to upgrade from | `<oldest version that upgrades without manual steps>` |
+| Works alongside other versions | <No: run every MDK package on this version | the versions, and for which packages> |
 | Breaking changes | <None | Yes: docs/guides/upgrade/v<major>.md> |
 | Security fixes | <None | count by severity, with GHSA IDs> |
 | New deprecations | <None | MDK-DEP-NNNN, …> |
