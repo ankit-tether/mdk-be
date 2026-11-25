@@ -1,6 +1,6 @@
 # MDK Release and Deprecation Policy (HLD)
 
-> **Version:** 0.4.0  |  **Date:** 2026-11-24  |  **Status:** Draft
+> **Version:** 0.4.1  |  **Date:** 2026-11-25  |  **Status:** Draft
 >
 > How MDK versions and schedules releases, which versions receive fixes and for how long, and how an interface is deprecated and removed. Intended home: `docs/reference/releases.md` in the MDK repo, replacing `docs/reference/versioning.md`. Where another HLD differs on versioning, compatibility or deprecation, this document supersedes it. Branching and the step-by-step release procedure are in the release process documentation, not here; [Appendix A](#appendix-a-release-process-moves-to-releasingmd) holds the process parts of this policy until they move to `RELEASING.md`.
 
@@ -19,7 +19,7 @@ MDK ships every two weeks, but nothing tells an integrator or an operator what a
 
 **In scope:** every publishable `@tetherto/mdk-*` package in the MDK repository: Kernel, Gateway, Worker runtime and contract, client, app runtime, MCP server, agent, the `mdk` CLI and its templates, and the UI toolkit. They ship at one version number, so they follow one policy.
 
-**Out of scope**, except for how they [declare compatibility](#71-declaring-mdk-compatibility): apps and Workers in their own repositories (catalog apps, partner Workers in `external-workers.json`), which version independently; everything under `examples/`; mock servers and test utilities.
+**Out of scope**, except for how their [compatibility is managed](#71-compatibility-of-vendor-workers-and-apps): apps and Workers in their own repositories (catalog apps, partner Workers in `external-workers.json`), which version independently; everything under `examples/`; mock servers and test utilities.
 
 ---
 
@@ -113,7 +113,7 @@ id: my-app
 | Rule | Commitment |
 | --- | --- |
 | Which files | Every file MDK parses and a user or generator writes: `mdk.yaml`, `mdk-app.yaml`, `mdk-plugin.json`, `mdk-contract.json`, the catalogue and Worker manifests (`external-workers.json`), and any new one |
-| Which files are not | `package.json`, `tsconfig.json` and other files owned by another tool. Compatibility there is declared through `engines.mdk` ([§7.1](#71-declaring-mdk-compatibility)) |
+| Which files are not | `package.json`, `tsconfig.json` and other files owned by another tool |
 | When the number changes | Only when the file's schema changes incompatibly. Adding an optional field never changes it |
 | New generation | Ships only in a MAJOR. The previous generation stays accepted alongside it for the full [deprecation window](#63-deprecation-window), so a Worker built against `mdk/v1` keeps loading on the MAJOR that introduces `mdk/v2` |
 | Missing field | `mdk.yaml`: an error, as today. Every other file: treated as `mdk/v1` with a `mdk validate` warning through all of `1.x`, and an error from `2.0.0`, covered by its migration guide |
@@ -314,9 +314,9 @@ Every deprecation gets an ID, `MDK-DEP-NNNN`, assigned in order and never reused
 
 `MDK_NO_DEPRECATION=1` silences runtime warnings; `MDK_THROW_DEPRECATION=1` turns them into errors, so CI catches a deprecated call before the removal does. The shared helper behind these variables and the Gateway headers are still to be built ([§10](#10-tooling-to-build)).
 
-**Deprecating an interface never deprecates a release.** 
-- A deprecated interface is flagged where people meet it: the editor, the logs, the CLI, the docs and the changelog. npm is not one of those places. 
-- `npm deprecate` on a version is kept for four cases: a broken release ([§8](#8-exceptions)), a MAJOR at end of life ([§5.1](#51-major-lifecycle)), a retired package, and every `0.x` version when `1.0.0` ships ([§9](#9-the-100-release)). 
+**Deprecating an interface never deprecates a release.**
+- A deprecated interface is flagged where people meet it: the editor, the logs, the CLI, the docs and the changelog. npm is not one of those places.
+- `npm deprecate` on a version is kept for four cases: a broken release ([§8](#8-exceptions)), a MAJOR at end of life ([§5.1](#51-major-lifecycle)), a retired package, and every `0.x` version when `1.0.0` ships ([§9](#9-the-100-release)).
 - Older MINORs of a supported MAJOR aren't npm-deprecated. An npm deprecation tells everyone who installs a version not to use it, and it can't say which interface is the problem. An older MINOR still works and upgrades directly, so the warning would be wrong, and it would teach people to ignore the ones that matter.
 
 ### 6.3 Deprecation window
@@ -373,9 +373,23 @@ sequenceDiagram
 
 ## 7. Compatibility and upgrades
 
-### 7.1 Declaring MDK compatibility
+### 7.1 Compatibility of vendor Workers and apps
 
-Workers and apps declare the MDK versions they support in `package.json`, in the `engines` block that already holds the Node.js range:
+**In this phase the MDK team owns compatibility.** A vendor doesn't have to update its repository when MDK releases. The MDK team checks that the listed vendor Workers and catalog apps keep working on each new release, and contacts a vendor only when its Worker or app needs a change.
+
+| Step | Who | What |
+| --- | --- | --- |
+| List | MDK team | Each vendor Worker is listed in `external-workers.json`, pinned to a commit of the vendor's repository |
+| Check | MDK team | Before each release, every listed Worker is checked against it. Today that is the contract conformance check, which validates the Worker's `mdk-contract.json` against the release's schema and also runs nightly |
+| Publish | MDK team | The supported-Workers list shows each listed Worker and the result of its check for the current release |
+| Reach out | MDK team | If a release needs a change in a vendor's Worker or app, the MDK team tells the vendor before the release, with the change needed. The release notes name the affected Workers and apps |
+| Update | Vendor | Only when asked. The MDK team then moves the pin to the vendor's new commit |
+
+The Worker contract and the app interfaces are Stable ([§3.2](#32-public-interfaces)), so inside a MAJOR a release shouldn't need a vendor change at all. A MAJOR can, and so can a [§8](#8-exceptions) exception. From `1.0.0`, a vendor's `^1.y.z` dependency on `@tetherto/mdk-worker` or `@tetherto/mdk-client` already covers every later `1.x`, so its `package.json` doesn't change either.
+
+A Worker or app that isn't listed is its author's responsibility. The Stable interfaces and the release notes tell the author what a release changes.
+
+**Later, vendors declare compatibility themselves.** When MDK is more stable, this responsibility moves to the vendors. A Worker or app then states the MDK versions it supports in `package.json`, and MDK tooling checks the range:
 
 ```json
 {
@@ -384,15 +398,7 @@ Workers and apps declare the MDK versions they support in `package.json`, in the
 }
 ```
 
-| Artifact | Declares |
-| --- | --- |
-| Worker | `engines.mdk`, a `^` dependency on `@tetherto/mdk-worker`, and `apiVersion` in `mdk-contract.json` |
-| App | `engines.mdk`, and a `^` dependency on `@tetherto/mdk-client` and any other MDK package it imports |
-| UI / dashboard | A `^` dependency on each MDK UI package it imports |
-
-`mdk create` writes `engines.mdk` as `^<current version>`. `mdk validate app|worker` warns when the running MDK is outside the range. `mdk add app` and the Worker runtime refuse an artifact whose range excludes the running MAJOR, and warn when only the MINOR is outside it. Until those checks [ship](#10-tooling-to-build), the range is informational. An artifact built against `1.y` works on every later `1.x`, not on an earlier `1.x` or on `2.0`.
-
-The catalog and the supported-Workers list show the range each entry was tested against. Partner Workers are checked with the existing contract conformance check against every supported MAJOR, and the list shows the result per MAJOR.
+No date is set for the move. It is announced to the listed vendors and in the release notes before it takes effect, and the `engines.mdk` tooling is built then ([§10](#10-tooling-to-build)).
 
 ### 7.2 One version per stack
 
@@ -402,7 +408,7 @@ The supported configuration is every `@tetherto/mdk-*` package in a stack on the
 - Where a release is known to work alongside another version, its release notes say so. That statement covers that release only and is not a standing guarantee
 - The order, timing and staging of a rollout at a site belong to the site's own runbook, not to this policy
 
-An external Worker or app follows the same rule for the MDK packages it depends on. Its `^` range lets a site install the stack's version without changing the Worker's or app's code ([§7.1](#71-declaring-mdk-compatibility)).
+An external Worker or app follows the same rule for the MDK packages it depends on. Its `^` range lets a site install the stack's version without changing the Worker's or app's code ([§7.1](#71-compatibility-of-vendor-workers-and-apps)).
 
 ### 7.3 Migrations and generated projects
 
@@ -469,7 +475,7 @@ A broken release isn't an exception but the remedy for one: npm versions can't b
 | Breaks | Every breaking change since `0.14.0`, listed in the migration guide. `MDK-DEP-0002` is the only deprecation old enough to remove |
 | Deprecates | `MDK-DEP-0001` (the ORK store key, [§6.5](#65-reference-example-retiring-the-ork-name-mdk-dep-0001)) |
 | Stable | The interfaces marked Stable in [§3.2](#32-public-interfaces): the Worker contract, what the Gateway exposes to apps, the CLI and the config formats. The UI toolkit, MCP server, agent and other package entry points ship as Experimental |
-| Ships | `docs/guides/upgrade/v1.md`, a manual migration guide from the last `0.y`; `engines.mdk` in the templates; the CI upgrade test. No `mdk upgrade` |
+| Ships | `docs/guides/upgrade/v1.md`, a manual migration guide from the last `0.y`; the CI upgrade test. No `mdk upgrade` |
 | `apiVersion` | Missing in `mdk.yaml` stays an error. Missing anywhere else is a warning through all of `1.x` |
 
 **In force from `1.0.0`:** SemVer, the deprecation window, the MAJOR lifecycle and support phases, and the security targets.
@@ -484,19 +490,18 @@ Parts of this policy rely on tooling that doesn't exist yet. Until an item ships
 
 | Item | Section | Needed by | Until then |
 | --- | --- | --- | --- |
-| `engines.mdk` in the `mdk create` templates | [§7.1](#71-declaring-mdk-compatibility) | `1.0.0` | — |
 | [Deprecation checklist](#a6-deprecating-an-interface) and the two PR template checkboxes ([A.1](#a1-commits-and-pull-requests)) | [§6](#6-deprecation) | `1.0.0`; tried in `0.15.0` if agreed in time | — |
 | CI upgrade test | [§7.3](#73-migrations-and-generated-projects) | `1.0.0` | — |
 | Kernel store migration for `MDK-DEP-0001` | [§6.5](#65-reference-example-retiring-the-ork-name-mdk-dep-0001) | `1.0.0` | If it misses the cut, it ships in a `1.x` MINOR and the register follows |
 | `apiVersion` written by templates for `mdk-app.yaml`, `mdk-plugin.json` and `mdk-contract.json`, with the `contractVersion` alias | [§3.4](#34-schema-versions-apiversion) | A `1.x` MINOR | A missing field is a warning |
-| `engines.mdk` warning in `mdk validate` when the running MDK is outside the range | [§7.1](#71-declaring-mdk-compatibility) | A `1.x` MINOR | The range is informational |
-| `engines.mdk` refusal in `mdk add` and the Worker runtime when the range excludes the running MAJOR | [§7.1](#71-declaring-mdk-compatibility) | Backlog: `2.0.0-rc.1` | The range is informational |
+| `engines.mdk` in the templates, and its checks in `mdk validate`, `mdk add` and the Worker runtime | [§7.1](#71-compatibility-of-vendor-workers-and-apps) | Backlog: when compatibility moves to the vendors | The MDK team checks the listed Workers and apps |
 | Shared runtime deprecation helper with `MDK_NO_DEPRECATION` and `MDK_THROW_DEPRECATION` | [§6.2](#62-how-a-deprecation-is-announced) | The first deprecation after `1.0.0` | Each warning is written by hand in the same format |
 | Gateway `Deprecation`, `Sunset` and `Link` headers | [§6.2](#62-how-a-deprecation-is-announced) | Before the first Gateway route is deprecated | — |
 | Automatic store snapshot before a migration | [§7.3](#73-migrations-and-generated-projects) | A `1.x` MINOR, once sized | Backup steps in the release notes |
-| Conformance check of partner Workers against every supported MAJOR | [§7.1](#71-declaring-mdk-compatibility) | Backlog: `2.0.0` | The existing check, against the current release |
+| Load check: each listed vendor Worker starts and registers with the release's Kernel | [§7.1](#71-compatibility-of-vendor-workers-and-apps) | A `1.x` MINOR | The contract conformance check, and a manual check when a release changes the Worker runtime |
+| Conformance check of partner Workers against every supported MAJOR | [§7.1](#71-compatibility-of-vendor-workers-and-apps) | Backlog: `2.0.0` | The existing check, against the current release |
 | `mdk doctor`, stack checks: every `@tetherto/mdk-*` package is on the same version ([§7.2](#72-one-version-per-stack)) and resolves to a published version that isn't npm-deprecated | [§7.3](#73-migrations-and-generated-projects) | A `1.x` MINOR | — |
-| `mdk doctor`, MAJOR checks: an app's or Worker's range against the running MAJOR | [§7.1](#71-declaring-mdk-compatibility) | Backlog: `2.0.0-rc.1` | — |
+| `mdk doctor`, MAJOR checks: an app's or Worker's `engines.mdk` range against the running MAJOR | [§7.1](#71-compatibility-of-vendor-workers-and-apps) | Backlog: `2.0.0-rc.1` | — |
 | `mdk upgrade` | [§7.3](#73-migrations-and-generated-projects) | Backlog: `2.0.0-rc.1` | The migration guide, applied by hand |
 | End-of-life startup warning in maintenance PATCHes | [§11](#11-communication) | When `1.x` enters maintenance | — |
 
@@ -554,8 +559,8 @@ An app or a Worker: no, the templates use Stable interfaces only. A dashboard us
 **Why doesn't npm warn me that I'm on an older MINOR?**
 Because an older MINOR still works and upgrades directly to the newest release. npm warnings are kept for broken, end-of-life and `0.x` versions. Deprecated interfaces warn where you use them ([§6.2](#62-how-a-deprecation-is-announced)), and the release notes say what a newer release fixes.
 
-**How does my Worker or app say which MDK it supports?**
-`engines.mdk` in `package.json`, and `apiVersion` in its config files ([§7.1](#71-declaring-mdk-compatibility)).
+**I maintain a vendor Worker. Do I have to update it for every MDK release?**
+No. In this phase the MDK team checks the listed vendor Workers and apps against each release and contacts you only if yours needs a change. Later, vendors will declare the MDK versions they support themselves ([§7.1](#71-compatibility-of-vendor-workers-and-apps)).
 
 **Is the UI covered by this policy?**
 Yes. UI packages ship under the same version number as the rest of MDK. At `1.0.0` the UI toolkit is Experimental, so a component can change in a MINOR, listed under `Breaking changes (experimental)` with upgrade steps.
